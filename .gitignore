@@ -12,3 +12,7 @@ data/
 
 # Local Claude Code preview configuration
 .claude/
+
+# Sample topic data (replaceable; kept out of version control)
+docs/sample_topics.json
+docs/sample_topics.zh.json

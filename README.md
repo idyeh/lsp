@@ -2,7 +2,7 @@
 
 A small web application for planning a semester of student seminars: the lab publishes a pool of topics, students say what they would like to attend and whether they would present, organisers turn the votes into a programme of about eight sessions, and students then record whether they expect to attend each confirmed session.
 
-It implements [docs/SRS.md](docs/SRS.md). The stack is deliberately plain so students can maintain it: **Python, FastAPI, SQLAlchemy, SQLite and server-rendered Jinja2 pages** (no JavaScript build step).
+It implements [docs/SRS.md](docs/SRS.md). The interface is available in **English and Chinese (中文)**, including the topic content. The stack is deliberately plain so students can maintain it: **Python, FastAPI, SQLAlchemy, SQLite and server-rendered Jinja2 pages** (no JavaScript build step).
 
 ## Quick start
 
@@ -40,7 +40,45 @@ LSP_DATABASE_URL=sqlite:///demo.db python -m app.cli seed-demo      # prints ran
 LSP_DATABASE_URL=sqlite:///demo.db uvicorn app.main:create_app --factory
 ```
 
-`seed-demo` refuses to run if the database already contains users. Do not use demo accounts for real data.
+`seed-demo` creates one organiser and eight students with random votes, and imports the topics from `docs/sample_topics.json` (see [Topic data](#topic-data-and-importing-it)). That file is sample data kept **out of version control**, so on a fresh clone either put it there or pass `--topics-file`. `seed-demo` refuses to run if the database already contains users. Do not use demo accounts for real data.
+
+## Language
+
+Every page has an **English / 中文** switch in the header. The choice is remembered in a cookie (it survives logging out); until someone chooses, the browser's language preference decides, with English as the fallback. The JSON API always answers in English.
+
+- **Interface text** is written in English in the code and translated through the catalogue in [app/i18n/zh.py](app/i18n/zh.py). A string without a Chinese entry simply shows in English, and a test fails if any marked string lacks one, so when you add or reword interface text, add the Chinese line too.
+- **Topic content** is stored in two versions: the topic itself holds the English text, and a *translation* row holds the Chinese title, description and keywords. Organisers edit both on the topic form, and users see the version for their language, falling back to English when a topic has no Chinese version. **Organiser → Topics** shows which topics still lack one.
+- **Categories** and the **semester name** are bilingual too, under **Organiser → Settings & voting**. Categories are entered one per line as `identifier | English name | Chinese name`.
+- Translations are prepared in advance and stored; nothing is machine-translated while the app runs.
+
+## Topic data and importing it
+
+`python -m app.cli import-topics [FILE]` loads topics into the database (the default file is `docs/sample_topics.json`). The file holds lists of topics in the same shape as the API's topic input:
+
+```json
+{
+  "core_topics":     [{"title": "...", "description": "...", "category": "software-engineering",
+                       "topic_type": "core", "keywords": ["Git", "debugging"], "status": "active"}],
+  "elective_topics": [{"title": "...", "description": "...", "category": "robotics",
+                       "topic_type": "optional", "keywords": ["VLA"], "status": "active"}]
+}
+```
+
+The Chinese version is a second file next to it, with the same name plus `.zh.json` (`docs/sample_topics.zh.json`), keyed by each topic's **English title**:
+
+```json
+{
+  "language": "zh",
+  "topics": {"<English title>": {"title": "...", "description": "...", "keywords": ["..."]}},
+  "category_labels": {"software-engineering": "软件工程"}
+}
+```
+
+- Categories used by the topics are added to the configured list automatically (with the names from `category_labels`).
+- Importing is safe to repeat. Topics whose English title already exists are skipped, and only a *missing* translation is filled in, so edits made in the web interface are never overwritten.
+- Topics without an entry in the translations file are imported in English only and listed in the output, as are entries that match no topic.
+- Topics are owned by the first organiser (`--created-by USERNAME` picks another), so create one first.
+- `docs/sample_topics.json` and `docs/sample_topics.zh.json` are the project's *sample* data and are listed in `.gitignore`. Replace them with your own data (same format) whenever you like.
 
 ## Configuration
 
@@ -63,7 +101,7 @@ All settings are environment variables.
 
 1. **Users** – the organiser creates an account for each student (**Organiser → Users**) and hands over the initial password privately.
 2. **Settings** – set the semester name, the target numbers (default 8 sessions: 4 core + 4 optional) and, if needed, the topic categories.
-3. **Topics** – create the topic pool (**Organiser → Topics**). Mark each topic *core* (always runs) or *optional* (competes for a slot), and choose its status: *draft* topics stay hidden from students, *active* ones appear in the pool. (The form defaults to *active*; topics created through the API default to *draft*.)
+3. **Topics** – create the topic pool (**Organiser → Topics**), or import it with `import-topics`. Mark each topic *core* (always runs) or *optional* (competes for a slot), and choose its status: *draft* topics stay hidden from students, *active* ones appear in the pool. (The form defaults to *active*; topics created through the API default to *draft*.) Add the Chinese title and description in the second section of the form.
 4. **Proposals** – students suggest topics (**Propose a topic**). Organisers edit, approve, reject or archive them (**Organiser → Proposals**). Approving creates an active topic.
 5. **Voting** – open voting in **Settings & voting**. Students rate their interest in each optional topic and say whether they would lead, co-present or maybe present any topic. **Results** shows totals only.
 6. **Planning** – **Organiser → Planning & sessions** shows a suggested plan. Tick the topics you want (override the suggestion freely), give each a teaching week, and create provisional sessions.
@@ -96,10 +134,11 @@ The JSON API lives under `/api` and follows SRS section 8; interactive documenta
 Differences from the SRS suggestions:
 
 - `DELETE /api/topics/{id}` and `DELETE /api/sessions/{id}` are **not provided**; archive a topic or cancel a session instead, as the SRS recommends.
-- Added: `POST /api/topic-proposals/{id}/archive`, and the optional `ranking` field in the candidate-plan response (every eligible optional topic, best first).
-- Added error codes: `AUTH_REQUIRED`, `VALIDATION_ERROR`, `INVALID_CATEGORY`, `INVALID_PROPOSAL_STATE`, `DUPLICATE_PRESENTER`, `PRESENTER_NOT_FOUND`, `USER_NOT_FOUND`, `DUPLICATE_USER`, `LAST_ORGANISER`, `WEAK_PASSWORD`, `CSRF_FAILED`, plus generic `NOT_FOUND`, `CONFLICT` and `INTERNAL_ERROR`.
+- Added: `POST /api/topic-proposals/{id}/archive`, `POST /api/auth/password` (change your own password; body `current_password` and `new_password`; other sessions of that user are signed out), and the optional `ranking` field in the candidate-plan response (every eligible optional topic, best first).
+- Topics carry a `translations` object (for example `{"zh": {"title", "description", "keywords"}}`) in responses, and accept it when created or updated: a language's entry replaces the stored one, `null` removes it, and languages you leave out are untouched. Settings gain `semester_name_zh` and `category_labels`.
+- Added error codes: `AUTH_REQUIRED`, `VALIDATION_ERROR`, `INVALID_CATEGORY`, `INVALID_PROPOSAL_STATE`, `DUPLICATE_PRESENTER`, `PRESENTER_NOT_FOUND`, `USER_NOT_FOUND`, `DUPLICATE_USER`, `LAST_ORGANISER`, `WEAK_PASSWORD`, `PASSWORD_UNCHANGED`, `CSRF_FAILED`, plus generic `NOT_FOUND`, `CONFLICT` and `INTERNAL_ERROR`.
 - `TopicProposal` has an extra nullable `topic_id` linking an approved proposal to the topic it created.
-- User and settings management (accounts, passwords, categories) is available through the web pages only.
+- User management (creating accounts, organiser password resets, activating and deactivating) and the language switch are available through the web pages only.
 
 ## Project layout
 
@@ -112,10 +151,11 @@ app/
   schemas.py       Pydantic request/response models
   deps.py          authentication and permission dependencies
   security.py      argon2 password hashing
+  i18n/            translation helpers and the Chinese catalogue (zh.py)
   services/        ALL business rules (preferences, results, planning, sessions, ...)
   api/             thin JSON routers calling the services
   web/             thin HTML routers, Jinja2 templates and CSS calling the same services
-  cli.py           init-db, create-user, seed-demo
+  cli.py           init-db, create-user, import-topics, seed-demo
 tests/             pytest suite
 ```
 
@@ -128,13 +168,13 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-The suite covers login, preference creation/update and duplicate prevention, score calculation, candidate ranking, every organiser-only operation, the proposal workflow, sessions and attendance rules, the web forms (including CSRF) and the command-line tools.
+The suite covers login and password change, preference creation/update and duplicate prevention, score calculation, candidate ranking, every organiser-only operation, the proposal workflow, sessions and attendance rules, the web forms (including CSRF on every POST route), the English/Chinese interface (a completeness check on the catalogue, language selection, translated pages), bilingual topic content, and the command-line tools including the topic import.
 
 ## Known limitations
 
 - **No schema migrations.** Tables are created on first start, but later changes to the data model would need a manual migration (or adopting Alembic).
-- **No login rate limiting or lockout**, and no email-based password reset. Organisers can set a new password for anyone, but **users cannot change their own password** yet.
-- **Logout is client-side.** Sessions are signed cookies, so a copied cookie stays valid until it expires; deactivating the account does cut access immediately.
+- **No login rate limiting or lockout**, and no email-based password reset. Users change their own password under **Account**, and organisers can set a new one for anyone; a changed or reset password signs the user out everywhere else.
+- **Logout is client-side.** Sessions are signed cookies, so a copied cookie stays valid until it expires. Deactivating the account or changing its password does cut access immediately.
 - **CSRF protection differs by interface.** Web forms carry a per-session token that every POST must present. The JSON API relies on the `SameSite=Lax` session cookie and JSON-only request bodies instead; keep it behind the same origin as the web pages and do not enable cross-origin (CORS) access without adding token checks.
 - **Small groups reveal individuals.** Aggregate counts (for example "1 lead presenter") can identify a person when only a few students vote.
 - **Last write wins** if the same person edits their preferences in two tabs.
@@ -142,3 +182,4 @@ The suite covers login, preference creation/update and duplicate prevention, sco
 - Timetable clashes (two sessions in the same week) are not checked, topics and sessions cannot be hard-deleted, and there are no notifications, calendar export or single sign-on (all out of scope for the first release).
 - The interface uses plain forms and full page loads; HTMX (suggested in the SRS) is not used.
 - Form errors are shown as a message after reloading the page; typed text in a rejected form is not kept.
+- **Only topics, categories and the semester name are bilingual.** Student proposals, session notes and people's names stay in the language they were typed in; an approved proposal becomes a topic with that text, so add the other language by editing the topic. Only English and Chinese are supported.
