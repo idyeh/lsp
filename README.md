@@ -91,11 +91,64 @@ All settings are environment variables.
 | `LSP_COOKIE_SECURE` | `false` | Set to `true` when served over HTTPS so the session cookie is only sent over HTTPS. |
 | `LSP_SESSION_MAX_AGE` | `604800` (7 days) | Login lifetime in seconds. |
 
-### Deployment notes
+## Deployment
 
-- **HTTPS.** If the app is reachable from the public Internet it must be served over HTTPS. Run uvicorn on `127.0.0.1` behind a reverse proxy that terminates TLS (for example Caddy: `seminars.example.org { reverse_proxy 127.0.0.1:8000 }`) and set `LSP_COOKIE_SECURE=true`.
-- **Backups.** Everything lives in one SQLite file. Take a consistent copy while the app is running with `sqlite3 data/seminar.db ".backup 'backup.db'"`.
-- **Workers.** One uvicorn process is plenty for a lab group. Sessions are signed cookies, so more workers also work as long as they share `LSP_SECRET_KEY`.
+The scripts in [deploy/](deploy/) install the application as a systemd service on a Linux server (Debian, Ubuntu, RHEL and similar; Python 3.11+), behind a reverse proxy that provides HTTPS. Everything is idempotent, so running a step twice is safe.
+
+```text
+/opt/lab-seminar-planner        the code and .venv, owned by root: the service cannot modify its own program
+/etc/lab-seminar-planner/env    configuration and secret key, readable by root only
+/var/lib/lab-seminar-planner    database and backups, owned by the service user and closed to everyone else
+```
+
+**First time**, on the server:
+
+```bash
+sudo git clone <repository-url> /opt/lab-seminar-planner
+cd /opt/lab-seminar-planner
+sudo deploy/setup-server.sh              # add --no-https for a plain-HTTP internal network
+sudo deploy/deploy.sh --ref v0.3.0       # a tag, branch or commit
+sudo deploy/lsp create-user alice --display-name "Alice Example" --role organiser
+```
+
+`setup-server.sh` creates a `lab-seminar` system user (no login), the data directory, the configuration file with a **freshly generated secret key**, and the systemd units (the service, and a daily backup timer). `deploy.sh` creates the virtual environment, installs the dependencies, creates or upgrades the database tables (it never drops anything), restarts the service and then **checks the running server over HTTP** (`scripts/smoke_test.py`). If that check fails it shows the service log and the command that returns to the previous version.
+
+Then put a reverse proxy with HTTPS in front of `127.0.0.1:8000`; copy and edit [deploy/Caddyfile.example](deploy/Caddyfile.example) (automatic certificates) or [deploy/nginx.conf.example](deploy/nginx.conf.example). With the default configuration the session cookie is marked `Secure`, so logging in works **only over HTTPS**; run `setup-server.sh --no-https` (or set `LSP_COOKIE_SECURE=false` in the configuration file) only on a trusted internal network.
+
+**Updating** to a new version:
+
+```bash
+sudo deploy/deploy.sh --ref v0.4.0       # and, if it goes wrong, the previous one: --ref v0.3.0
+```
+
+`--ref` refuses to run over uncommitted changes in the checkout. Use `--no-restart` to prepare without touching the service.
+
+**Day to day:**
+
+| Task | Command |
+|---|---|
+| Run an application command on the live database (create users, import topics...) | `sudo deploy/lsp <command>`, e.g. `sudo deploy/lsp import-topics docs/sample_topics.json` |
+| Logs | `journalctl -u lab-seminar-planner -f` |
+| Status, restart | `systemctl status lab-seminar-planner`, `sudo systemctl restart lab-seminar-planner` |
+| Change a setting (secret key, HTTPS, port, login lifetime) | edit `/etc/lab-seminar-planner/env`, then restart |
+| Back up now | `sudo systemctl start lab-seminar-planner-backup` (or `sudo deploy/backup.sh`) |
+
+**Backups.** A systemd timer runs `deploy/backup.sh` every night (about 03:30) and keeps the newest 14 copies in `/var/lib/lab-seminar-planner/backups` (`KEEP` and `BACKUP_DIR` change that). The copy is made with SQLite's backup API, so it is consistent while the app is running, and each copy is checked before it is kept. Those files are on the same disk as the database, so **copy them to another machine** as well. To restore: `sudo systemctl stop lab-seminar-planner`, copy a backup over `/var/lib/lab-seminar-planner/seminar.db` as the service user (`sudo -u lab-seminar cp ...`), start the service.
+
+**Notes.** One uvicorn process is plenty for a lab group (sessions are signed cookies, so more workers also work if they share the secret key). Each deployment uses the newest dependency versions allowed by `requirements.txt`, which CI tests, rather than a lock file.
+
+## Continuous integration
+
+`scripts/ci.sh` is the one command that decides whether a change is good, locally and on any CI service:
+
+```bash
+scripts/ci.sh                      # needs Python 3.11+
+PYTHON=python3.13 scripts/ci.sh    # a specific interpreter
+```
+
+It creates a virtual environment per Python version (`.venv-ci-3.12`...), installs `requirements-dev.txt`, then runs, stopping at the first failure: **ruff** (rules in `ruff.toml`), a syntax check of every shell script (and `shellcheck` when installed), the **test suite**, and a **smoke test** that starts the real server as production does and checks pages and a real login over HTTP.
+
+[.github/workflows/ci.yml](.github/workflows/ci.yml) runs that script on Python 3.11, 3.12 and 3.13 for every push and pull request. On another CI service, run `scripts/ci.sh` in a job that has Python 3.11+ and (optionally) shellcheck. Deploying is deliberately not automated from CI, because it needs credentials for your server; run `deploy/deploy.sh --ref <tag>` there by hand, or from your own pipeline, after CI has passed for that tag.
 
 ## Importing accounts in bulk
 
@@ -179,6 +232,9 @@ app/
   api/             thin JSON routers calling the services
   web/             thin HTML routers, Jinja2 templates and CSS calling the same services
   cli.py           init-db, create-user, import-topics, seed-demo
+scripts/           ci.sh (CI entry point), smoke_test.py (checks a real running server)
+deploy/            server setup, deploy, backup and admin scripts, systemd units, proxy examples
+.github/workflows/ CI workflow
 tests/             pytest suite
 ```
 
@@ -188,10 +244,11 @@ The rule of thumb: **business rules live in `services/`**; `api/` and `web/` onl
 
 ```bash
 pip install -r requirements-dev.txt
-pytest
+pytest                # the test suite
+scripts/ci.sh         # everything CI checks: lint, shell scripts, tests, smoke test
 ```
 
-The suite covers login and password change, bulk account import, preference creation/update and duplicate prevention, score calculation, candidate ranking, every organiser-only operation, the proposal workflow, sessions and attendance rules, the web forms (including CSRF on every POST route), the English/Chinese interface (a completeness check on the catalogue, language selection, translated pages), bilingual topic content, and the command-line tools including the topic import.
+The suite covers login and password change, bulk account import, preference creation/update and duplicate prevention, score calculation, candidate ranking, every organiser-only operation, the proposal workflow, sessions and attendance rules, the web forms (including CSRF on every POST route), the English/Chinese interface (a completeness check on the catalogue, language selection, translated pages), bilingual topic content, the command-line tools including the topic import, and the deployment scripts (server setup, backups with rotation and integrity check, the admin wrapper).
 
 ## Known limitations
 
@@ -201,6 +258,7 @@ The suite covers login and password change, bulk account import, preference crea
 - **CSRF protection differs by interface.** Web forms carry a per-session token that every POST must present. The JSON API relies on the `SameSite=Lax` session cookie and JSON-only request bodies instead; keep it behind the same origin as the web pages and do not enable cross-origin (CORS) access without adding token checks.
 - **Small groups reveal individuals.** Aggregate counts (for example "1 lead presenter") can identify a person when only a few students vote.
 - **Last write wins** if the same person edits their preferences in two tabs.
+- **Deployment targets Linux with systemd.** The scripts were run and tested for real on macOS and in test mode (`DESTDIR`), but the systemd units, user creation and proxy examples have not been run on a live Linux server in this project's development. There is no Docker image, no automatic deployment from CI, and rollback is a manual `deploy.sh --ref <previous>`.
 - Account import reads **CSV only** (not `.xlsx`), and there is no preview step: fix the reported rows and upload again.
 - Changing a presenter's role means removing and re-adding them. Replacing a provisional session's topic clears its presenters.
 - Timetable clashes (two sessions in the same week) are not checked, topics and sessions cannot be hard-deleted, and there are no notifications, calendar export or single sign-on (all out of scope for the first release).

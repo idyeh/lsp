@@ -1,0 +1,12 @@
+# Installed by deploy/setup-server.sh.
+[Unit]
+Description=Daily backup of the Lab Seminar Planner database
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+RandomizedDelaySec=15min
+# Run a missed backup after the machine was off at the scheduled time.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

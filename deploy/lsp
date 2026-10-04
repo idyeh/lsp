@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+# Run an application command against the PRODUCTION database, as the service user:
+#
+#   sudo deploy/lsp create-user alice --display-name "Alice Example" --role organiser
+#   sudo deploy/lsp import-topics docs/sample_topics.json
+#   sudo deploy/lsp --help
+#
+# It reads the same configuration file as the service, so the right database is used, and it makes sure
+# files are created with the service user's ownership (running the commands as root yourself would
+# leave a database the service cannot write).
+set -euo pipefail
+# shellcheck source=deploy/common.sh
+. "$(dirname "${BASH_SOURCE[0]}")/common.sh"
+load_env
+cd "$APP_DIR"
+
+PYTHON="${PYTHON:-$APP_DIR/.venv/bin/python}"
+[ -x "$PYTHON" ] || die "Python not found at $PYTHON (run deploy/deploy.sh first)"
+run_as_service_user "$PYTHON" -m app.cli "$@"

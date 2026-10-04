@@ -21,7 +21,7 @@ print(sys.version.split()[0])'
 VENV="${CI_VENV:-.venv-ci-$("$PYTHON" -c 'import sys; print("%d.%d" % sys.version_info[:2])')}"
 step "Dependencies (virtual environment: $VENV)"
 [ -x "$VENV/bin/python" ] || "$PYTHON" -m venv "$VENV"
-"$VENV/bin/python" -m pip install --quiet -r requirements-dev.txt
+"$VENV/bin/python" -m pip install --quiet --disable-pip-version-check -r requirements-dev.txt
 
 step "Lint (ruff)"
 "$VENV/bin/ruff" check .

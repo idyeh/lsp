@@ -1,0 +1,33 @@
+# Reverse proxy with HTTPS for nginx. Replace the host name and certificate paths (for example from
+# certbot), save as /etc/nginx/conf.d/lab-seminar-planner.conf, then:
+#   sudo nginx -t && sudo systemctl reload nginx
+server {
+    listen 80;
+    server_name seminars.example.org;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name seminars.example.org;
+
+    ssl_certificate     /etc/letsencrypt/live/seminars.example.org/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/seminars.example.org/privkey.pem;
+
+    # The largest upload the application accepts is a 256 KB account list.
+    client_max_body_size 1m;
+
+    add_header Strict-Transport-Security "max-age=31536000" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "same-origin" always;
+
+    location / {
+        # LSP_BIND_HOST:LSP_BIND_PORT from /etc/lab-seminar-planner/env
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+    }
+}

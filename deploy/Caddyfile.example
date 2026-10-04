@@ -1,0 +1,21 @@
+# Reverse proxy with automatic HTTPS (certificates are obtained and renewed by Caddy itself).
+# Replace the host name with yours (it must point at this server), save as /etc/caddy/Caddyfile, then:
+#   sudo systemctl reload caddy
+seminars.example.org {
+	encode zstd gzip
+
+	# The largest upload the application accepts is a 256 KB account list.
+	request_body {
+		max_size 1MB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "same-origin"
+	}
+
+	# LSP_BIND_HOST:LSP_BIND_PORT from /etc/lab-seminar-planner/env
+	reverse_proxy 127.0.0.1:8000
+}
