@@ -8,6 +8,7 @@ from sqlalchemy import func, select
 
 from app.enums import SessionStatus, TopicType
 from app.models import Preference, SeminarSession, Topic, User
+from app.web import web_router
 from tests.conftest import PASSWORD
 
 CSRF = re.compile(r'name="csrf_token" value="([^"]+)"')
@@ -49,6 +50,19 @@ class Browser:
         return response
 
 
+def web_post_paths():
+    """Every POST route of the web UI, found by walking the router (so new routes are covered automatically)."""
+    stack, paths = list(web_router.routes), set()
+    while stack:
+        route = stack.pop()
+        inner = getattr(route, "original_router", None)
+        if inner is not None:
+            stack.extend(inner.routes)
+        elif "POST" in getattr(route, "methods", ()):
+            paths.add(route.path)
+    return sorted(paths)
+
+
 @pytest.fixture
 def browser(app):
     created = []
@@ -83,6 +97,17 @@ def test_wrong_password_shows_a_message_and_stays_logged_out(browser, student):
     assert response.headers["location"] == "/login"
     assert "Invalid username or password" in b.follow(response).text
     assert b.get("/topics").headers["location"] == "/login"
+
+
+def test_the_csrf_check_covers_every_post_route():
+    assert len(web_post_paths()) > 25  # guards against the walk silently finding nothing
+
+
+@pytest.mark.parametrize("path", web_post_paths())
+def test_every_web_post_requires_a_csrf_token(browser, organiser, path):
+    b = browser(organiser)  # even a fully authorised organiser is refused without the token
+    response = b.client.post(re.sub(r"\{[^}]+\}", "1", path), data={})
+    assert response.status_code == 403
 
 
 def test_login_without_a_csrf_token_is_refused(app, student):
@@ -167,7 +192,7 @@ def test_voting_form_saves_both_preferences(browser, db, voting_open, student, m
     assert rows == {core.id: (0, "lead"), opt.id: (3, "maybe")}
 
     page = b.get("/topics").text  # the form shows the saved choices
-    assert f'<option value="3" selected>' in page and '<option value="lead" selected>' in page
+    assert '<option value="3" selected>' in page and '<option value="lead" selected>' in page
 
 
 def test_resubmitting_the_form_updates_instead_of_duplicating(browser, db, voting_open, student, make_topic):

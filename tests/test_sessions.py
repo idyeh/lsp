@@ -1,7 +1,7 @@
 import pytest
 from sqlalchemy import func, select
 
-from app.enums import SessionStatus, TopicStatus, TopicType
+from app.enums import SessionStatus, TopicStatus
 from app.models import AttendanceIntent, SeminarSession
 from app.services import sessions as session_service
 

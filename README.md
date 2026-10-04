@@ -135,6 +135,7 @@ The suite covers login, preference creation/update and duplicate prevention, sco
 - **No schema migrations.** Tables are created on first start, but later changes to the data model would need a manual migration (or adopting Alembic).
 - **No login rate limiting or lockout**, and no email-based password reset. Organisers can set a new password for anyone, but **users cannot change their own password** yet.
 - **Logout is client-side.** Sessions are signed cookies, so a copied cookie stays valid until it expires; deactivating the account does cut access immediately.
+- **CSRF protection differs by interface.** Web forms carry a per-session token that every POST must present. The JSON API relies on the `SameSite=Lax` session cookie and JSON-only request bodies instead; keep it behind the same origin as the web pages and do not enable cross-origin (CORS) access without adding token checks.
 - **Small groups reveal individuals.** Aggregate counts (for example "1 lead presenter") can identify a person when only a few students vote.
 - **Last write wins** if the same person edits their preferences in two tabs.
 - Changing a presenter's role means removing and re-adding them. Replacing a provisional session's topic clears its presenters.

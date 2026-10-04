@@ -178,7 +178,7 @@ def create_proposed_sessions(
     )
     created: list[SeminarSession] = []
     skipped: list[Topic] = []
-    for topic, (_topic_id, week) in zip(topics, items):
+    for topic, (_topic_id, week) in zip(topics, items, strict=True):
         if topic.id in already_scheduled:
             skipped.append(topic)
             continue

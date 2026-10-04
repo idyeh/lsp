@@ -39,12 +39,13 @@ def save_preferences(request: Request, db: Db, user: CurrentUser, form: Form):
         for topic in topics.list_pool(db):
             if topic.status != TopicStatus.active or f"presenting_{topic.id}" not in form:
                 continue
-            # Core topics have no interest selector, so their interest is always 0.
-            interest = form_int(
-                form,
-                f"interest_{topic.id}",
-                AppError(422, "INVALID_INTEREST_LEVEL", "Interest level must be 0, 1, 2 or 3."),
-            ) if f"interest_{topic.id}" in form else 0
+            interest = 0  # core topics have no interest selector
+            if f"interest_{topic.id}" in form:
+                interest = form_int(
+                    form,
+                    f"interest_{topic.id}",
+                    AppError(422, "INVALID_INTEREST_LEVEL", "Interest level must be 0, 1, 2 or 3."),
+                )
             changes.append(PreferenceChange(topic.id, interest, text(form, f"presenting_{topic.id}")))
         preferences.save_preferences(db, user, changes)
     return redirect("/topics")

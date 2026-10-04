@@ -18,7 +18,7 @@ from app.schemas import (
 )
 from app.services import planning, proposals, sessions, topics, users
 from app.services import settings as settings_service
-from app.services.results import compute_results, volunteers_by_topic
+from app.services.results import volunteers_by_topic
 from app.services.sessions import ALLOWED_TRANSITIONS
 from app.web.common import Form, action, blank_to_none, flash, form_int, redirect, render, text
 
@@ -166,7 +166,7 @@ def toggle_voting(request: Request, db: Db, organiser: Organiser, form: Form):
     opening = text(form, "open") == "1"
     with action(request, "Voting is now open." if opening else "Voting is now closed."):
         settings_service.update(db, {"voting_open": opening})
-    return redirect(text(form, "return_to") if text(form, "return_to") in ("/organiser/settings", "/organiser/planning") else "/organiser/settings")
+    return redirect("/organiser/settings")
 
 
 @router.post("/settings")

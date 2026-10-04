@@ -1,7 +1,6 @@
 from fastapi import APIRouter
 
 from app.deps import CurrentUser, Db, Organiser
-from app.errors import AppError
 from app.models import Topic
 from app.schemas import PlanRequest, PlanTopicOut, PlanWarningOut, CandidatePlanOut, ResultOut, VolunteerOut
 from app.services import planning, topics
