@@ -1,0 +1,8 @@
+# Lint rules: pyflakes (unused imports and variables, undefined names), syntax errors, and
+# flake8-bugbear (likely bugs). Run with `ruff check .` (scripts/ci.sh does this).
+target-version = "py311"
+
+[lint]
+select = ["F", "E9", "B"]
+# FastAPI's documented pattern is Depends()/Query() calls as argument defaults.
+ignore = ["B008"]
