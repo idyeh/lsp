@@ -16,33 +16,97 @@ from starlette.datastructures import FormData
 
 from app.deps import optional_user
 from app.errors import AppError
+from app.i18n import DEFAULT_LANGUAGE, LANGUAGES, N_, describe_validation_error, format_date, translate, translate_error
 from app.models import User
 from app.services import settings as settings_service
 
 templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
-# Human-readable labels for the values stored in the database.
+LANGUAGE_COOKIE = "lsp_lang"
+LANGUAGE_COOKIE_MAX_AGE = 365 * 24 * 3600
+
+# Human-readable labels for the values stored in the database (translated where they are shown).
 LABELS = {
-    "interest": {3: "Very interested", 2: "Interested", 1: "Slightly interested", 0: "No preference"},
-    "presentation": {"none": "Not presenting", "maybe": "Maybe", "co_present": "Co-present", "lead": "Lead"},
+    "interest": {
+        3: N_("Very interested"),
+        2: N_("Interested"),
+        1: N_("Slightly interested"),
+        0: N_("No preference"),
+    },
+    "presentation": {
+        "none": N_("Not presenting"),
+        "maybe": N_("Maybe"),
+        "co_present": N_("Co-present"),
+        "lead": N_("Lead"),
+    },
     "attendance": {
-        "attend": "Attend",
-        "probably_attend": "Probably attend",
-        "probably_absent": "Probably absent",
-        "not_sure": "Not sure",
+        "attend": N_("Attend"),
+        "probably_attend": N_("Probably attend"),
+        "probably_absent": N_("Probably absent"),
+        "not_sure": N_("Not sure"),
     },
     "session_status": {
-        "proposed": "Provisional",
-        "confirmed": "Confirmed",
-        "completed": "Completed",
-        "cancelled": "Cancelled",
+        "proposed": N_("Provisional"),
+        "confirmed": N_("Confirmed"),
+        "completed": N_("Completed"),
+        "cancelled": N_("Cancelled"),
     },
-    "presenter_role": {"lead": "Lead", "co_presenter": "Co-presenter"},
-    "selection": {"confirmed": "Confirmed", "proposed": "Provisional", "not_selected": "Not selected"},
+    "presenter_role": {"lead": N_("Lead"), "co_presenter": N_("Co-presenter")},
+    "selection": {
+        "confirmed": N_("Confirmed"),
+        "proposed": N_("Provisional"),
+        "not_selected": N_("Not selected"),
+    },
+    "topic_type": {"core": N_("Core"), "optional": N_("Optional")},
+    "topic_status": {
+        "draft": N_("Draft"),
+        "active": N_("Active"),
+        "closed": N_("Closed"),
+        "archived": N_("Archived"),
+    },
+    "proposal_status": {
+        "pending": N_("Pending"),
+        "approved": N_("Approved"),
+        "rejected": N_("Rejected"),
+        "archived": N_("Archived"),
+    },
+    "role": {"student": N_("Student"), "organiser": N_("Organiser")},
+    "suggestion": {
+        "core": N_("Core"),
+        "recommended": N_("Recommended"),
+        "alternative": N_("Alternative"),
+    },
 }
 templates.env.globals["labels"] = LABELS
-templates.env.filters["category_label"] = settings_service.category_label
-templates.env.filters["titlecase"] = lambda value: str(value).replace("_", " ").capitalize()
+# Changes whenever the stylesheet does, so browsers never keep showing an old copy after an update.
+templates.env.globals["asset_version"] = int((Path(__file__).parent / "static" / "style.css").stat().st_mtime)
+
+
+# --- language ---------------------------------------------------------------------
+
+
+def pick_language(request: Request) -> str:
+    """The language cookie if the user chose one, else the browser's preference, else English."""
+    cached = getattr(request.state, "language", None)
+    if cached:
+        return cached
+    language = request.cookies.get(LANGUAGE_COOKIE)
+    if language not in LANGUAGES:
+        language = DEFAULT_LANGUAGE
+        for part in request.headers.get("accept-language", "").split(","):
+            tag = part.split(";")[0].strip().lower()
+            if tag.startswith("zh") or tag.startswith("en"):
+                language = tag[:2]
+                break
+    request.state.language = language
+    return language
+
+
+def safe_path(value: str | None, default: str = "/") -> str:
+    """Only allow redirects to a path on this site (never to another host)."""
+    if value and value.startswith("/") and not value.startswith("//") and not any(c in value for c in "\\\r\n"):
+        return value
+    return default
 
 
 # --- sessions, flash messages and CSRF ----------------------------------------
@@ -55,8 +119,10 @@ def csrf_token(request: Request) -> str:
     return token
 
 
-def flash(request: Request, message: str, level: str = "info") -> None:
-    request.session["flash"] = [*request.session.get("flash", []), [level, message]]
+def flash(request: Request, message: str, level: str = "info", **params) -> None:
+    """Queue a message for the next page, translated into the language the user is using now."""
+    text_ = translate(pick_language(request), message, **params)
+    request.session["flash"] = [*request.session.get("flash", []), [level, text_]]
 
 
 async def csrf_form(request: Request) -> FormData:
@@ -65,7 +131,11 @@ async def csrf_form(request: Request) -> FormData:
     expected = request.session.get("csrf_token")
     supplied = form.get("csrf_token")
     if not expected or not isinstance(supplied, str) or not hmac.compare_digest(expected, supplied):
-        raise AppError(403, "CSRF_FAILED", "Your form expired or was invalid. Please go back, reload the page and try again.")
+        raise AppError(
+            403,
+            "CSRF_FAILED",
+            N_("Your form expired or was invalid. Please go back, reload the page and try again."),
+        )
     return form
 
 
@@ -79,14 +149,13 @@ def redirect(url: str) -> RedirectResponse:
 @contextmanager
 def action(request: Request, success: str | None = None) -> Iterator[None]:
     """Run a state-changing step; show a flash message instead of failing the page on a rule violation."""
+    language = pick_language(request)
     try:
         yield
     except AppError as exc:
-        flash(request, exc.message, "error")
+        flash(request, translate_error(language, exc), "error")
     except ValidationError as exc:
-        first = exc.errors()[0]
-        field = str(first["loc"][0]).replace("_", " ").capitalize() if first["loc"] else "Input"
-        flash(request, f"{field}: {first['msg']}", "error")
+        flash(request, describe_validation_error(language, exc), "error")
     else:
         if success:
             flash(request, success, "success")
@@ -117,19 +186,41 @@ def form_int(form: FormData, name: str, error: AppError) -> int:
 def render(
     request: Request, db: Session | None, template: str, user: User | None, status_code: int = 200, **context
 ):
+    language = pick_language(request)
+    settings = settings_service.get_all(db) if db is not None else None
+    labels = settings["category_labels"] if settings else {}
+    semester_name = None
+    if settings:
+        semester_name = (language == "zh" and settings["semester_name_zh"]) or settings["semester_name"]
+    query = f"?{request.url.query}" if request.url.query else ""
     context.update(
         user=user,
         csrf_token=csrf_token(request),
-        flashes=request.session.pop("flash", []),
-        settings=settings_service.get_all(db) if db is not None else None,
+        flashes=request.session.pop("flash", []),  # already translated when queued
+        settings=settings,
+        semester_name=semester_name,
         path=request.url.path,
+        current_url=request.url.path + query,
+        lang=language,
+        html_lang="zh-CN" if language == "zh" else "en",
+        languages=LANGUAGES,
+        # Translation helpers used by the templates:
+        _=lambda message, **params: translate(language, message, **params),
+        L=lambda topic: topic.localized(language),  # a topic's title, description and keywords in this language
+        CL=lambda slug: settings_service.category_label(slug, language, labels),
+        fmt_date=lambda value: format_date(language, value),
     )
     return templates.TemplateResponse(request, template, context, status_code=status_code)
 
 
-def render_error(request: Request, status_code: int, message: str):
+def render_error(request: Request, status_code: int, message: str, **params):
+    """An error page. `message` is an English template (translated here) with optional parameters."""
     if status_code >= 500:  # do not touch the database while handling a server failure
-        return render(request, None, "error.html", None, status_code, error_status=status_code, message=message)
+        return render(
+            request, None, "error.html", None, status_code, error_status=status_code, message=message, params=params
+        )
     with request.app.state.sessionmaker() as db:
         user = optional_user(request, db)
-        return render(request, db, "error.html", user, status_code, error_status=status_code, message=message)
+        return render(
+            request, db, "error.html", user, status_code, error_status=status_code, message=message, params=params
+        )

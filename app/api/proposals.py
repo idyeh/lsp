@@ -12,6 +12,7 @@ from app.schemas import (
     ProposalUpdate,
 )
 from app.services import proposals
+from app.i18n import N_
 
 router = APIRouter(prefix="/topic-proposals", tags=["topic proposals"])
 
@@ -30,7 +31,7 @@ def list_proposals(db: Db, user: CurrentUser, status: ProposalStatus | None = No
 def update_proposal(proposal_id: int, payload: ProposalUpdate, db: Db, user: CurrentUser):
     proposal = proposals.get_proposal(db, proposal_id, user)  # students only reach their own
     if proposal.submitted_by != user.id and not user.is_organiser:
-        raise AppError(403, "PERMISSION_DENIED", "Only the submitter can edit this proposal.")
+        raise AppError(403, "PERMISSION_DENIED", N_("Only the submitter can edit this proposal."))
     return proposals.update_proposal(db, proposal, payload.model_dump(exclude_unset=True))
 
 

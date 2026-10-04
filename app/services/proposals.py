@@ -9,10 +9,11 @@ from app.models import Topic, TopicProposal, User, utcnow
 from app.schemas import ProposalCreate
 from app.services import settings as settings_service
 from app.services.topics import keywords_to_text
+from app.i18n import STATUS_WORD, N_
 
 
 def _not_found() -> AppError:
-    return AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found.")
+    return AppError(404, "PROPOSAL_NOT_FOUND", N_("Proposal not found."))
 
 
 def _require_pending(proposal: TopicProposal) -> None:
@@ -20,7 +21,8 @@ def _require_pending(proposal: TopicProposal) -> None:
         raise AppError(
             409,
             "INVALID_PROPOSAL_STATE",
-            f"The proposal is {proposal.status.value}; only pending proposals can be changed.",
+            N_("The proposal is {status}; only pending proposals can be changed."),
+            status=STATUS_WORD[proposal.status.value],
         )
 
 
@@ -83,7 +85,7 @@ def approve_proposal(
     _require_pending(proposal)
     category = category or proposal.category
     if not category:
-        raise AppError(422, "INVALID_CATEGORY", "A category is required to approve this proposal.")
+        raise AppError(422, "INVALID_CATEGORY", N_("A category is required to approve this proposal."))
     topic = Topic(
         title=proposal.title,
         description=proposal.description,
@@ -116,7 +118,7 @@ def reject_proposal(db: Session, proposal: TopicProposal, reviewer: User, note: 
 
 def archive_proposal(db: Session, proposal: TopicProposal, reviewer: User) -> TopicProposal:
     if proposal.status == ProposalStatus.archived:
-        raise AppError(409, "INVALID_PROPOSAL_STATE", "The proposal is already archived.")
+        raise AppError(409, "INVALID_PROPOSAL_STATE", N_("The proposal is already archived."))
     proposal.status = ProposalStatus.archived
     if proposal.reviewed_by is None:  # keep the original approver/rejecter for traceability
         proposal.reviewed_by = reviewer.id

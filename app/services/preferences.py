@@ -17,6 +17,7 @@ from app.errors import AppError
 from app.models import Preference, Topic, User
 from app.services import settings as settings_service
 from app.services import topics as topic_service
+from app.i18n import N_
 
 
 @dataclass(frozen=True)
@@ -28,30 +29,30 @@ class PreferenceChange:
 
 def _require_voting_open(db: Session) -> None:
     if not settings_service.is_voting_open(db):
-        raise AppError(409, "VOTING_CLOSED", "Preferences can no longer be changed because voting is closed.")
+        raise AppError(409, "VOTING_CLOSED", N_("Preferences can no longer be changed because voting is closed."))
 
 
 def _votable_topic(db: Session, topic_id: int, user: User) -> Topic:
     topic = topic_service.get_topic(db, topic_id, user)
     if topic.status != TopicStatus.active:
-        raise AppError(409, "INVALID_TOPIC_STATE", "This topic is not open for preferences.")
+        raise AppError(409, "INVALID_TOPIC_STATE", N_("This topic is not open for preferences."))
     return topic
 
 
 def _validate(topic: Topic, change: PreferenceChange) -> PresentationPreference:
     level = change.interest_level
     if isinstance(level, bool) or level not in (0, 1, 2, 3):
-        raise AppError(422, "INVALID_INTEREST_LEVEL", "Interest level must be 0, 1, 2 or 3.")
+        raise AppError(422, "INVALID_INTEREST_LEVEL", N_("Interest level must be 0, 1, 2 or 3."))
     try:
         presentation = PresentationPreference(change.presentation_preference)
     except ValueError:
         allowed = ", ".join(p.value for p in PresentationPreference)
         raise AppError(
-            422, "INVALID_PRESENTATION_PREFERENCE", f"Presentation preference must be one of: {allowed}."
+            422, "INVALID_PRESENTATION_PREFERENCE", N_("Presentation preference must be one of: {allowed}."), allowed=allowed
         ) from None
     if topic.topic_type == TopicType.core and level != 0:
         raise AppError(
-            422, "INVALID_INTEREST_LEVEL", "Interest is only collected for optional topics; core topics always run."
+            422, "INVALID_INTEREST_LEVEL", N_("Interest is only collected for optional topics; core topics always run.")
         )
     return presentation
 
@@ -87,7 +88,7 @@ def _apply(db: Session, user_id: int, changes: dict[int, tuple[int, Presentation
             return
         except IntegrityError:
             db.rollback()
-    raise AppError(409, "DUPLICATE_PREFERENCE", "Your preferences were changed at the same time; please try again.")
+    raise AppError(409, "DUPLICATE_PREFERENCE", N_("Your preferences were changed at the same time; please try again."))
 
 
 def set_preference(

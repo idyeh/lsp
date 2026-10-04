@@ -25,7 +25,10 @@ nav a { text-decoration: none; padding: .15rem 0; border-bottom: 2px solid trans
 nav a.active { border-color: var(--accent); font-weight: 600; }
 .nav-organiser { background: var(--info-bg); border-bottom: 1px solid var(--border); }
 .nav-organiser .wrap { padding-top: .35rem; padding-bottom: .35rem; display: flex; flex-wrap: wrap; gap: .2rem 1rem; align-items: center; font-size: .92rem; }
-.who { margin-left: auto; display: flex; gap: .6rem; align-items: center; font-size: .92rem; }
+.header-end { margin-left: auto; display: flex; flex-wrap: wrap; gap: .4rem .8rem; align-items: center; font-size: .92rem; }
+.header-end a.active { font-weight: 600; }
+.lang-switch { gap: .5rem; padding-left: .8rem; border-left: 1px solid var(--border); }
+.lang-switch button.current { color: var(--text); font-weight: 700; text-decoration: none; cursor: default; }
 .status-line { color: var(--muted); font-size: .9rem; padding: .5rem 0 0; }
 main { padding-bottom: 3rem; }
 .muted { color: var(--muted); }
@@ -79,7 +82,7 @@ details { margin: .8rem 0; }
 summary { cursor: pointer; font-weight: 600; }
 @media (max-width: 700px) {
   h1 { font-size: 1.35rem; }
-  .who { margin-left: 0; }
+  .header-end { margin-left: 0; }
   /* The semester plan is the main phone view: show each row as a card instead of scrolling sideways. */
   table.stack, table.stack tbody, table.stack tr, table.stack td { display: block; }
   table.stack thead { display: none; }

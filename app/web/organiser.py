@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter, Request
 
-from app.deps import Db, Organiser
+from app.deps import Db, Organiser, start_session
 from app.enums import PresenterRole, ProposalStatus, Role, SessionStatus, TopicStatus
 from app.errors import AppError
 from app.schemas import (
@@ -13,6 +13,7 @@ from app.schemas import (
     SessionUpdate,
     SettingsUpdate,
     TopicCreate,
+    TopicTranslationIn,
     TopicUpdate,
     parse_keywords,
 )
@@ -20,7 +21,8 @@ from app.services import planning, proposals, sessions, topics, users
 from app.services import settings as settings_service
 from app.services.results import volunteers_by_topic
 from app.services.sessions import ALLOWED_TRANSITIONS
-from app.web.common import Form, action, blank_to_none, flash, form_int, redirect, render, text
+from app.web.common import Form, action, blank_to_none, flash, form_int, pick_language, redirect, render, text
+from app.i18n import N_
 
 router = APIRouter(prefix="/organiser")
 
@@ -28,7 +30,7 @@ STATUS_ORDER = {s: i for i, s in enumerate(TopicStatus)}
 
 
 def _not_a_number(what: str) -> AppError:
-    return AppError(422, "VALIDATION_ERROR", f"{what} must be a number.")
+    return AppError(422, "VALIDATION_ERROR", N_("{what} must be a number."), what=what)
 
 
 # --- topics -------------------------------------------------------------------
@@ -55,8 +57,8 @@ def new_topic_page(request: Request, db: Db, organiser: Organiser):
 @router.post("/topics/new")
 def create_topic(request: Request, db: Db, organiser: Organiser, form: Form):
     ok = False
-    with action(request, "Topic created."):
-        data = TopicCreate(**_topic_fields(form))
+    with action(request, N_("Topic created.")):
+        data = TopicCreate(**_topic_fields(form), translations=_topic_translations(form))
         topics.create_topic(db, data, organiser)
         ok = True
     return redirect("/organiser/topics" if ok else "/organiser/topics/new")
@@ -70,9 +72,9 @@ def edit_topic_page(topic_id: int, request: Request, db: Db, organiser: Organise
 @router.post("/topics/{topic_id}")
 def update_topic(topic_id: int, request: Request, db: Db, organiser: Organiser, form: Form):
     ok = False
-    with action(request, "Topic saved."):
+    with action(request, N_("Topic saved.")):
         topic = topics.get_topic(db, topic_id, organiser)
-        changes = TopicUpdate(**_topic_fields(form)).model_dump(exclude_unset=True)
+        changes = TopicUpdate(**_topic_fields(form), translations=_topic_translations(form)).model_dump(exclude_unset=True)
         topics.update_topic(db, topic, changes)
         ok = True
     return redirect("/organiser/topics" if ok else f"/organiser/topics/{topic_id}")
@@ -80,9 +82,23 @@ def update_topic(topic_id: int, request: Request, db: Db, organiser: Organiser, 
 
 @router.post("/topics/{topic_id}/archive")
 def archive_topic(topic_id: int, request: Request, db: Db, organiser: Organiser, form: Form):
-    with action(request, "Topic archived."):
+    with action(request, N_("Topic archived.")):
         topics.update_topic(db, topics.get_topic(db, topic_id, organiser), {"status": TopicStatus.archived})
     return redirect("/organiser/topics")
+
+
+def _topic_translations(form) -> dict:
+    """The Chinese version from the form: both title and description, or neither (which removes it)."""
+    title, description = text(form, "title_zh"), text(form, "description_zh")
+    if not title and not description:
+        return {"zh": None}
+    if not title or not description:
+        raise AppError(
+            422,
+            "VALIDATION_ERROR",
+            N_("Please give both a Chinese title and a Chinese description, or leave both empty."),
+        )
+    return {"zh": TopicTranslationIn(title=title, description=description, keywords=parse_keywords(text(form, "keywords_zh")))}
 
 
 def _topic_fields(form) -> dict:
@@ -115,7 +131,7 @@ def proposal_list(request: Request, db: Db, organiser: Organiser):
 
 @router.post("/proposals/{proposal_id}/edit")
 def edit_proposal(proposal_id: int, request: Request, db: Db, organiser: Organiser, form: Form):
-    with action(request, "Proposal updated."):
+    with action(request, N_("Proposal updated.")):
         proposal = proposals.get_proposal(db, proposal_id, organiser)
         data = ProposalUpdate(
             title=text(form, "title"),
@@ -130,7 +146,7 @@ def edit_proposal(proposal_id: int, request: Request, db: Db, organiser: Organis
 
 @router.post("/proposals/{proposal_id}/approve")
 def approve_proposal(proposal_id: int, request: Request, db: Db, organiser: Organiser, form: Form):
-    with action(request, "Proposal approved; the topic is now in the pool."):
+    with action(request, N_("Proposal approved; the topic is now in the pool.")):
         proposal = proposals.get_proposal(db, proposal_id, organiser)
         data = ProposalApprove(topic_type=text(form, "topic_type") or "optional", category=blank_to_none(form, "category"))
         proposals.approve_proposal(db, proposal, organiser, data.topic_type, data.category)
@@ -139,7 +155,7 @@ def approve_proposal(proposal_id: int, request: Request, db: Db, organiser: Orga
 
 @router.post("/proposals/{proposal_id}/reject")
 def reject_proposal(proposal_id: int, request: Request, db: Db, organiser: Organiser, form: Form):
-    with action(request, "Proposal rejected."):
+    with action(request, N_("Proposal rejected.")):
         proposal = proposals.get_proposal(db, proposal_id, organiser)
         data = ProposalReject(review_note=blank_to_none(form, "review_note"))
         proposals.reject_proposal(db, proposal, organiser, data.review_note)
@@ -148,7 +164,7 @@ def reject_proposal(proposal_id: int, request: Request, db: Db, organiser: Organ
 
 @router.post("/proposals/{proposal_id}/archive")
 def archive_proposal(proposal_id: int, request: Request, db: Db, organiser: Organiser, form: Form):
-    with action(request, "Proposal archived."):
+    with action(request, N_("Proposal archived.")):
         proposals.archive_proposal(db, proposals.get_proposal(db, proposal_id, organiser), organiser)
     return redirect("/organiser/proposals")
 
@@ -156,29 +172,66 @@ def archive_proposal(proposal_id: int, request: Request, db: Db, organiser: Orga
 # --- settings -----------------------------------------------------------------
 
 
+def _category_lines(settings: dict) -> str:
+    """The category list as editable text: identifier | English name | Chinese name."""
+    lines = []
+    for slug in settings["categories"]:
+        labels = settings["category_labels"]
+        zh = labels.get(slug, {}).get("zh", "")
+        lines.append(f"{slug} | {settings_service.category_label(slug, 'en', labels)} | {zh}")
+    return "\n".join(lines)
+
+
+def _parse_category_lines(raw: str) -> tuple[list[str], dict[str, dict[str, str]]]:
+    """Inverse of _category_lines. A line without '|' is just identifier(s), comma-separated."""
+    slugs: list[str] = []
+    labels: dict[str, dict[str, str]] = {}
+    for line in raw.splitlines():
+        if "|" not in line:
+            slugs += [settings_service.normalise_category(c) for c in line.split(",") if c.strip()]
+            continue
+        parts = [p.strip() for p in line.split("|")]
+        if not parts[0]:
+            continue
+        slug = settings_service.normalise_category(parts[0])
+        slugs.append(slug)
+        names = {}
+        if len(parts) > 1 and parts[1] and parts[1] != settings_service.category_label(slug):  # only a real override
+            names["en"] = parts[1]
+        if len(parts) > 2 and parts[2]:
+            names["zh"] = parts[2]
+        if names:
+            labels[slug] = names
+    return slugs, labels
+
+
 @router.get("/settings")
 def settings_page(request: Request, db: Db, organiser: Organiser):
-    return render(request, db, "organiser/settings.html", organiser)
+    return render(
+        request, db, "organiser/settings.html", organiser, category_lines=_category_lines(settings_service.get_all(db))
+    )
 
 
 @router.post("/settings/voting")
 def toggle_voting(request: Request, db: Db, organiser: Organiser, form: Form):
     opening = text(form, "open") == "1"
-    with action(request, "Voting is now open." if opening else "Voting is now closed."):
+    with action(request, N_("Voting is now open.") if opening else N_("Voting is now closed.")):
         settings_service.update(db, {"voting_open": opening})
     return redirect("/organiser/settings")
 
 
 @router.post("/settings")
 def save_settings(request: Request, db: Db, organiser: Organiser, form: Form):
-    with action(request, "Settings saved."):
-        categories = [c for line in text(form, "categories").splitlines() for c in line.split(",") if c.strip()]
+    with action(request, N_("Settings saved.")):
+        categories, category_labels = _parse_category_lines(text(form, "categories"))
         changes = SettingsUpdate(
             semester_name=text(form, "semester_name"),
-            target_session_count=form_int(form, "target_session_count", _not_a_number("Total sessions")),
-            target_core_count=form_int(form, "target_core_count", _not_a_number("Core sessions")),
-            target_optional_count=form_int(form, "target_optional_count", _not_a_number("Optional sessions")),
+            semester_name_zh=text(form, "semester_name_zh"),
+            target_session_count=form_int(form, "target_session_count", _not_a_number(N_("Total sessions"))),
+            target_core_count=form_int(form, "target_core_count", _not_a_number(N_("Core sessions"))),
+            target_optional_count=form_int(form, "target_optional_count", _not_a_number(N_("Optional sessions"))),
             categories=categories,
+            category_labels=category_labels,
         )
         settings_service.update(db, changes.model_dump(exclude_unset=True))
     return redirect("/organiser/settings")
@@ -194,11 +247,11 @@ def user_list(request: Request, db: Db, organiser: Organiser):
 
 @router.post("/users")
 def create_user(request: Request, db: Db, organiser: Organiser, form: Form):
-    with action(request, "Account created. Give the user their password in person or over a private channel."):
+    with action(request, N_("Account created. Give the user their password in person or over a private channel.")):
         try:
             role = Role(text(form, "role") or "student")
         except ValueError:
-            raise AppError(422, "VALIDATION_ERROR", "Unknown role.") from None
+            raise AppError(422, "VALIDATION_ERROR", N_("Unknown role.")) from None
         users.create_user(
             db,
             text(form, "username"),
@@ -212,26 +265,29 @@ def create_user(request: Request, db: Db, organiser: Organiser, form: Form):
 
 @router.post("/users/{user_id}/password")
 def reset_password(user_id: int, request: Request, db: Db, organiser: Organiser, form: Form):
-    with action(request, "Password changed."):
-        users.set_password(db, users.get_user(db, user_id), str(form.get("password", "")))
+    with action(request, N_("Password changed.")):
+        target = users.get_user(db, user_id)
+        users.set_password(db, target, str(form.get("password", "")))
+        if target.id == organiser.id:
+            start_session(request, organiser)  # other sessions end; this one continues
     return redirect("/organiser/users")
 
 
 @router.post("/users/{user_id}/active")
 def set_user_active(user_id: int, request: Request, db: Db, organiser: Organiser, form: Form):
     activate = text(form, "active") == "1"
-    with action(request, "Account activated." if activate else "Account deactivated."):
+    with action(request, N_("Account activated.") if activate else N_("Account deactivated.")):
         users.set_active(db, users.get_user(db, user_id), activate)
     return redirect("/organiser/users")
 
 
 @router.post("/users/{user_id}/role")
 def set_user_role(user_id: int, request: Request, db: Db, organiser: Organiser, form: Form):
-    with action(request, "Role changed."):
+    with action(request, N_("Role changed.")):
         try:
             role = Role(text(form, "role"))
         except ValueError:
-            raise AppError(422, "VALIDATION_ERROR", "Unknown role.") from None
+            raise AppError(422, "VALIDATION_ERROR", N_("Unknown role.")) from None
         users.set_role(db, users.get_user(db, user_id), role)
     return redirect("/organiser/users")
 
@@ -275,23 +331,23 @@ def create_planned_sessions(request: Request, db: Db, organiser: Organiser, form
         for raw_id in form.getlist("topic_id"):
             topic_id = int(raw_id) if str(raw_id).isdigit() else None
             if topic_id is None:
-                raise AppError(422, "VALIDATION_ERROR", "Unknown topic selected.")
+                raise AppError(422, "VALIDATION_ERROR", N_("Unknown topic selected."))
             week = text(form, f"week_{topic_id}")
-            items.append((topic_id, form_int(form, f"week_{topic_id}", _not_a_number("Teaching week")) if week else None))
+            items.append((topic_id, form_int(form, f"week_{topic_id}", _not_a_number(N_("Teaching week"))) if week else None))
         if not items:
-            raise AppError(422, "VALIDATION_ERROR", "Select at least one topic to schedule.")
+            raise AppError(422, "VALIDATION_ERROR", N_("Select at least one topic to schedule."))
         created, skipped = sessions.create_proposed_sessions(db, organiser, items)
         if created:
-            flash(request, f"Created {len(created)} provisional session(s).", "success")
+            flash(request, N_("Created {count} provisional session(s)."), "success", count=len(created))
         if skipped:
-            names = ", ".join(t.title for t in skipped)
-            flash(request, f"Already scheduled, so skipped: {names}.", "info")
+            names = ", ".join(t.localized(pick_language(request)).title for t in skipped)
+            flash(request, N_("Already scheduled, so skipped: {names}."), "info", names=names)
     return redirect("/organiser/planning")
 
 
 @router.post("/sessions/new")
 def create_session(request: Request, db: Db, organiser: Organiser, form: Form):
-    with action(request, "Session created."):
+    with action(request, N_("Session created.")):
         data = SessionCreate(
             topic_id=text(form, "topic_id"),
             teaching_week=blank_to_none(form, "teaching_week"),
@@ -309,12 +365,12 @@ def publish_plan(request: Request, db: Db, organiser: Organiser, form: Form):
     with action(request):
         confirmed, skipped = sessions.confirm_all_proposed(db)
         if confirmed:
-            flash(request, f"Published: {len(confirmed)} session(s) are now confirmed.", "success")
+            flash(request, N_("Published: {count} session(s) are now confirmed."), "success", count=len(confirmed))
         else:
-            flash(request, "There were no provisional sessions to confirm.", "info")
+            flash(request, N_("There were no provisional sessions to confirm."), "info")
         if skipped:
-            names = ", ".join(s.topic.title for s in skipped)
-            flash(request, f"Still provisional because they have no week or date: {names}.", "error")
+            names = ", ".join(s.topic.localized(pick_language(request)).title for s in skipped)
+            flash(request, N_("Still provisional because they have no week or date: {names}."), "error", names=names)
     return redirect("/organiser/planning")
 
 
@@ -342,7 +398,7 @@ def session_page(session_id: int, request: Request, db: Db, organiser: Organiser
 
 @router.post("/sessions/{session_id}/update")
 def update_session(session_id: int, request: Request, db: Db, organiser: Organiser, form: Form):
-    with action(request, "Session saved."):
+    with action(request, N_("Session saved.")):
         session = sessions.get_session(db, session_id)
         changes = SessionUpdate(
             teaching_week=blank_to_none(form, "teaching_week"),
@@ -357,27 +413,27 @@ def update_session(session_id: int, request: Request, db: Db, organiser: Organis
 
 @router.post("/sessions/{session_id}/topic")
 def replace_topic(session_id: int, request: Request, db: Db, organiser: Organiser, form: Form):
-    with action(request, "Topic replaced; the previous presenters were cleared."):
+    with action(request, N_("Topic replaced; the previous presenters were cleared.")):
         session = sessions.get_session(db, session_id)
-        topic_id = form_int(form, "topic_id", AppError(422, "VALIDATION_ERROR", "Choose a topic."))
+        topic_id = form_int(form, "topic_id", AppError(422, "VALIDATION_ERROR", N_("Choose a topic.")))
         sessions.update_session(db, session, {"topic_id": topic_id})
     return redirect(f"/organiser/sessions/{session_id}")
 
 
 @router.post("/sessions/{session_id}/presenters")
 def add_presenter(session_id: int, request: Request, db: Db, organiser: Organiser, form: Form):
-    with action(request, "Presenter assigned."):
+    with action(request, N_("Presenter assigned.")):
         session = sessions.get_session(db, session_id)
-        user_id = form_int(form, "user_id", AppError(422, "VALIDATION_ERROR", "Choose a person."))
+        user_id = form_int(form, "user_id", AppError(422, "VALIDATION_ERROR", N_("Choose a person.")))
         role = text(form, "presenter_role")
         if role not in ("lead", "co_presenter"):
-            raise AppError(422, "VALIDATION_ERROR", "Choose a presenter role.")
+            raise AppError(422, "VALIDATION_ERROR", N_("Choose a presenter role."))
         sessions.assign_presenter(db, session, user_id, PresenterRole(role))
     return redirect(f"/organiser/sessions/{session_id}")
 
 
 @router.post("/sessions/{session_id}/presenters/{user_id}/remove")
 def remove_presenter(session_id: int, user_id: int, request: Request, db: Db, organiser: Organiser, form: Form):
-    with action(request, "Presenter removed."):
+    with action(request, N_("Presenter removed.")):
         sessions.remove_presenter(db, sessions.get_session(db, session_id), user_id)
     return redirect(f"/organiser/sessions/{session_id}")

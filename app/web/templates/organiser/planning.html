@@ -1,93 +1,105 @@
 {% extends "base.html" %}
-{% block title %}Planning &amp; sessions{% endblock %}
+{% block title %}{{ _("Planning & sessions") }}{% endblock %}
 {% macro presenter_cells(r) %}
   <td class="num">{{ r.presenter_counts['lead'] }}</td><td class="num">{{ r.presenter_counts['co_present'] }}</td><td class="num">{{ r.presenter_counts['maybe'] }}</td>
+{% endmacro %}
+{% macro warning_cell(topic_id) %}
+  {% set w = warnings_by_topic.get(topic_id) %}
+  {% if w %}
+    {% if w.type == 'NO_PRESENTER' %}<span class="badge status-proposed">{{ _("No presenter") }}</span> <span class="muted">{{ _("Nobody has volunteered to present this topic.") }}</span>
+    {% elif w.type == 'NO_LEAD_PRESENTER' %}<span class="badge status-proposed">{{ _("No lead") }}</span> <span class="muted">{{ _("Nobody has volunteered to lead this topic.") }}</span>
+    {% else %}<span class="badge status-proposed">{{ w.type }}</span> <span class="muted">{{ w.message }}</span>{% endif %}
+  {% endif %}
 {% endmacro %}
 {% macro pick_row(r, checked, label) %}
   {% set scheduled = r.selection_status != 'not_selected' %}
   <tr>
-    <td><input type="checkbox" name="topic_id" value="{{ r.topic.id }}" aria-label="Schedule {{ r.topic.title }}" {% if checked and not scheduled %}checked{% endif %} {% if scheduled %}disabled{% endif %}></td>
-    <td><strong>{{ r.topic.title }}</strong><div class="muted">{{ r.topic.category|category_label }}</div></td>
-    <td>{% if scheduled %}<span class="badge status-{{ r.selection_status }}">{{ labels.selection[r.selection_status] }}</span>{% else %}<span class="badge {{ 'status-confirmed' if label == 'Recommended' else '' }}">{{ label }}</span>{% endif %}</td>
+    <td><input type="checkbox" name="topic_id" value="{{ r.topic.id }}" aria-label="{{ _('Schedule {title}', title=L(r.topic).title) }}" {% if checked and not scheduled %}checked{% endif %} {% if scheduled %}disabled{% endif %}></td>
+    <td><strong>{{ L(r.topic).title }}</strong><div class="muted">{{ CL(r.topic.category) }}</div></td>
+    <td>{% if scheduled %}<span class="badge status-{{ r.selection_status }}">{{ _(labels.selection[r.selection_status]) }}</span>{% elif label %}<span class="badge {{ 'status-confirmed' if label == 'recommended' else '' }}">{{ _(labels.suggestion[label]) }}</span>{% endif %}</td>
     {% if r.topic.topic_type.value == 'optional' %}<td class="num"><strong>{{ r.interest_score }}</strong></td>{% endif %}
     {{ presenter_cells(r) }}
-    <td>{% set w = warnings_by_topic.get(r.topic.id) %}{% if w %}<span class="badge status-proposed">{{ w.type }}</span> <span class="muted">{{ w.message }}</span>{% endif %}</td>
-    <td>{% if not scheduled %}<input type="number" name="week_{{ r.topic.id }}" min="1" max="60" placeholder="week" aria-label="Teaching week for {{ r.topic.title }}" style="width:5.5rem">{% endif %}</td>
+    <td>{{ warning_cell(r.topic.id) }}</td>
+    <td>{% if not scheduled %}<input type="number" name="week_{{ r.topic.id }}" min="1" max="60" placeholder="{{ _('week') }}" aria-label="{{ _('Teaching week for {title}', title=L(r.topic).title) }}" style="width:5.5rem">{% endif %}</td>
   </tr>
 {% endmacro %}
 {% block content %}
-<h1>Planning &amp; sessions</h1>
-<p class="muted">The recommendation below is only a suggestion. Tick the topics you want, optionally give each a teaching week, and create provisional sessions. Nothing is visible to students as confirmed until you publish.</p>
+<h1>{{ _("Planning & sessions") }}</h1>
+<p class="muted">{{ _("The recommendation below is only a suggestion. Tick the topics you want, optionally give each a teaching week, and create provisional sessions. Nothing is visible to students as confirmed until you publish.") }}</p>
 
 <section class="card">
   <form method="get" action="/organiser/planning" class="inline-form">
-    <label>Total <input type="number" name="target_total" min="0" max="50" value="{{ targets.target_total }}" style="width:5rem"></label>
-    <label>Core <input type="number" name="target_core" min="0" max="50" value="{{ targets.target_core }}" style="width:5rem"></label>
-    <label>Optional slots <input type="number" name="target_optional" min="0" max="50" value="{{ targets.target_optional }}" style="width:5rem"></label>
-    <button class="secondary" type="submit">Regenerate</button>
+    <label>{{ _("Total") }} <input type="number" name="target_total" min="0" max="50" value="{{ targets.target_total }}" style="width:5rem"></label>
+    <label>{{ _("Core") }} <input type="number" name="target_core" min="0" max="50" value="{{ targets.target_core }}" style="width:5rem"></label>
+    <label>{{ _("Optional slots") }} <input type="number" name="target_optional" min="0" max="50" value="{{ targets.target_optional }}" style="width:5rem"></label>
+    <button class="secondary" type="submit">{{ _("Regenerate") }}</button>
   </form>
-  {% for w in general_warnings %}<p class="notice warn">{{ w.message }}</p>{% endfor %}
+  {% for w in general_warnings %}<p class="notice warn">
+    {% if w.type == 'CORE_COUNT_MISMATCH' %}{{ _("There are {found} active core topics; the target is {target}.", **w.params) }}
+    {% elif w.type == 'TARGET_TOTAL_MISMATCH' %}{{ _("The plan has {planned} sessions; the target is {target}.", **w.params) }}
+    {% else %}{{ w.message }}{% endif %}
+  </p>{% endfor %}
 </section>
 
 <form method="post" action="/organiser/planning/sessions">
   {% include "_csrf.html" %}
-  <h2>Core topics (always included)</h2>
+  <h2>{{ _("Core topics (always included)") }}</h2>
   <div class="table-wrap"><table>
-    <thead><tr><th></th><th>Topic</th><th>Suggestion</th><th class="num">Lead</th><th class="num">Co</th><th class="num">Maybe</th><th>Warnings</th><th>Week</th></tr></thead>
-    <tbody>{% for r in plan.core %}{{ pick_row(r, true, 'Core') }}{% else %}<tr><td colspan="8" class="muted">No active core topics.</td></tr>{% endfor %}</tbody>
+    <thead><tr><th></th><th>{{ _("Topic") }}</th><th>{{ _("Suggestion") }}</th><th class="num">{{ _("Lead") }}</th><th class="num">{{ _("Co") }}</th><th class="num">{{ _("Maybe") }}</th><th>{{ _("Warnings") }}</th><th>{{ _("Week") }}</th></tr></thead>
+    <tbody>{% for r in plan.core %}{{ pick_row(r, true, 'core') }}{% else %}<tr><td colspan="8" class="muted">{{ _("No active core topics.") }}</td></tr>{% endfor %}</tbody>
   </table></div>
 
-  <h2>Optional topics, best first</h2>
-  <p class="muted">Ranked by: has a lead or co-presenter volunteer, then interest score, then number of leads. You can tick an alternative or untick a recommendation to override the ranking.</p>
+  <h2>{{ _("Optional topics, best first") }}</h2>
+  <p class="muted">{{ _("Ranked by: has a lead or co-presenter volunteer, then interest score, then number of leads. You can tick an alternative or untick a recommendation to override the ranking.") }}</p>
   <div class="table-wrap"><table>
-    <thead><tr><th></th><th>Topic</th><th>Suggestion</th><th class="num">Score</th><th class="num">Lead</th><th class="num">Co</th><th class="num">Maybe</th><th>Warnings</th><th>Week</th></tr></thead>
+    <thead><tr><th></th><th>{{ _("Topic") }}</th><th>{{ _("Suggestion") }}</th><th class="num">{{ _("Score") }}</th><th class="num">{{ _("Lead") }}</th><th class="num">{{ _("Co") }}</th><th class="num">{{ _("Maybe") }}</th><th>{{ _("Warnings") }}</th><th>{{ _("Week") }}</th></tr></thead>
     <tbody>
     {% for r in plan.ranked_optionals %}
-      {% set label = 'Recommended' if r in plan.recommended else ('Alternative' if r in plan.alternatives else '') %}
+      {% set label = 'recommended' if r in plan.recommended else ('alternative' if r in plan.alternatives else '') %}
       {{ pick_row(r, r in plan.recommended, label) }}
-    {% else %}<tr><td colspan="9" class="muted">No active optional topics.</td></tr>{% endfor %}
+    {% else %}<tr><td colspan="9" class="muted">{{ _("No active optional topics.") }}</td></tr>{% endfor %}
     </tbody>
   </table></div>
-  <div class="actions"><button type="submit">Create provisional sessions for the ticked topics</button></div>
+  <div class="actions"><button type="submit">{{ _("Create provisional sessions for the ticked topics") }}</button></div>
 </form>
 
-<h2>Sessions</h2>
+<h2>{{ _("Sessions") }}</h2>
 <div class="table-wrap"><table>
-  <thead><tr><th>When</th><th>Topic</th><th>Presenters</th><th>Status</th><th></th></tr></thead>
+  <thead><tr><th>{{ _("When") }}</th><th>{{ _("Topic") }}</th><th>{{ _("Presenters") }}</th><th>{{ _("Status") }}</th><th></th></tr></thead>
   <tbody>
   {% for view in views %}{% set s = view.session %}
     <tr class="{{ s.status.value }}">
-      <td>{% if s.teaching_week %}Week {{ s.teaching_week }}{% endif %}{% if s.session_date %}<div>{{ s.session_date.strftime('%a %d %b %Y') }}</div>{% endif %}{% if not s.teaching_week and not s.session_date %}<span class="muted">No date yet</span>{% endif %}</td>
-      <td><strong>{{ s.topic.title }}</strong></td>
-      <td>{% for p in s.presenters %}{{ p.user.display_name }}{% if not loop.last %}, {% endif %}{% else %}<span class="muted">none yet</span>{% endfor %}</td>
-      <td><span class="badge status-{{ s.status.value }}">{{ labels.session_status[s.status] }}</span></td>
-      <td><a href="/organiser/sessions/{{ s.id }}">Edit</a></td>
+      <td>{% if s.teaching_week %}{{ _("Week {n}", n=s.teaching_week) }}{% endif %}{% if s.session_date %}<div>{{ fmt_date(s.session_date) }}</div>{% endif %}{% if not s.teaching_week and not s.session_date %}<span class="muted">{{ _("No date yet") }}</span>{% endif %}</td>
+      <td><strong>{{ L(s.topic).title }}</strong></td>
+      <td>{% for p in s.presenters %}{{ p.user.display_name }}{% if not loop.last %}, {% endif %}{% else %}<span class="muted">{{ _("none yet") }}</span>{% endfor %}</td>
+      <td><span class="badge status-{{ s.status.value }}">{{ _(labels.session_status[s.status]) }}</span></td>
+      <td><a href="/organiser/sessions/{{ s.id }}">{{ _("Edit") }}</a></td>
     </tr>
-  {% else %}<tr><td colspan="5" class="muted">No sessions yet.</td></tr>{% endfor %}
+  {% else %}<tr><td colspan="5" class="muted">{{ _("No sessions yet.") }}</td></tr>{% endfor %}
   </tbody>
 </table></div>
 
 <div class="actions">
   <form method="post" action="/organiser/sessions/publish" class="inline-form">
     {% include "_csrf.html" %}
-    <button type="submit">Publish: confirm all provisional sessions</button>
+    <button type="submit">{{ _("Publish: confirm all provisional sessions") }}</button>
   </form>
-  <span class="muted">Only provisional sessions that already have a week or date are confirmed.</span>
+  <span class="muted">{{ _("Only provisional sessions that already have a week or date are confirmed.") }}</span>
 </div>
 
 <details>
-  <summary>Add a single session by hand</summary>
+  <summary>{{ _("Add a single session by hand") }}</summary>
   <form method="post" action="/organiser/sessions/new" class="card">
     {% include "_csrf.html" %}
     <div class="form-grid">
-      <label>Topic <select name="topic_id" required>{% for t in schedulable %}<option value="{{ t.id }}">{{ t.title }}</option>{% endfor %}</select></label>
-      <label>Teaching week <input type="number" name="teaching_week" min="1" max="60"></label>
-      <label>Date <input type="date" name="session_date"></label>
-      <label>Start time <input type="time" name="start_time"></label>
-      <label>Status <select name="status"><option value="proposed">Provisional</option><option value="confirmed">Confirmed</option></select></label>
-      <label class="wide">Notes (room, format…) <input type="text" name="notes" maxlength="2000"></label>
+      <label>{{ _("Topic") }} <select name="topic_id" required>{% for t in schedulable %}<option value="{{ t.id }}">{{ L(t).title }}</option>{% endfor %}</select></label>
+      <label>{{ _("Teaching week") }} <input type="number" name="teaching_week" min="1" max="60"></label>
+      <label>{{ _("Date") }} <input type="date" name="session_date"></label>
+      <label>{{ _("Start time") }} <input type="time" name="start_time"></label>
+      <label>{{ _("Status") }} <select name="status"><option value="proposed">{{ _("Provisional") }}</option><option value="confirmed">{{ _("Confirmed") }}</option></select></label>
+      <label class="wide">{{ _("Notes (room, format…)") }} <input type="text" name="notes" maxlength="2000"></label>
     </div>
-    <div class="actions"><button type="submit">Add session</button></div>
+    <div class="actions"><button type="submit">{{ _("Add session") }}</button></div>
   </form>
 </details>
 {% endblock %}

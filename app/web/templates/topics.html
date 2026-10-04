@@ -1,32 +1,33 @@
 {% extends "base.html" %}
-{% block title %}Topics &amp; voting{% endblock %}
+{% block title %}{{ _("Topics & voting") }}{% endblock %}
 {% macro card(topic, show_interest) %}
   {% set pref = mine.get(topic.id) %}
   {% set editable = voting_open and topic.status.value == 'active' %}
+  {% set lt = L(topic) %}
   <article class="card">
     <div class="card-head">
-      <h3>{{ topic.title }}</h3>
-      <span class="badge {{ topic.topic_type.value }}">{{ topic.topic_type.value|titlecase }}</span>
-      <span class="badge cat">{{ topic.category|category_label }}</span>
-      {% if topic.status.value == 'closed' %}<span class="badge closed">Preferences closed</span>{% endif %}
+      <h3>{{ lt.title }}</h3>
+      <span class="badge {{ topic.topic_type.value }}">{{ _(labels.topic_type[topic.topic_type.value]) }}</span>
+      <span class="badge cat">{{ CL(topic.category) }}</span>
+      {% if topic.status.value == 'closed' %}<span class="badge closed">{{ _("Preferences closed") }}</span>{% endif %}
     </div>
-    <p>{{ topic.description }}</p>
-    {% if topic.keyword_list %}<p>{% for k in topic.keyword_list %}<span class="chip">{{ k }}</span>{% endfor %}</p>{% endif %}
+    <p>{{ lt.description }}</p>
+    {% if lt.keyword_list %}<p>{% for k in lt.keyword_list %}<span class="chip">{{ k }}</span>{% endfor %}</p>{% endif %}
     {% if topic.status.value == 'active' %}
     <div class="choices">
       {% if show_interest %}
-      <label>Interest in attending
+      <label>{{ _("Interest in attending") }}
         <select name="interest_{{ topic.id }}" {% if not editable %}disabled{% endif %}>
           {% for level in [0, 1, 2, 3] %}
-          <option value="{{ level }}" {% if (pref.interest_level if pref else 0) == level %}selected{% endif %}>{{ labels.interest[level] }}</option>
+          <option value="{{ level }}" {% if (pref.interest_level if pref else 0) == level %}selected{% endif %}>{{ _(labels.interest[level]) }}</option>
           {% endfor %}
         </select>
       </label>
       {% endif %}
-      <label>Willing to present?
+      <label>{{ _("Willing to present?") }}
         <select name="presenting_{{ topic.id }}" {% if not editable %}disabled{% endif %}>
           {% for value in ['none', 'maybe', 'co_present', 'lead'] %}
-          <option value="{{ value }}" {% if (pref.presentation_preference.value if pref else 'none') == value %}selected{% endif %}>{{ labels.presentation[value] }}</option>
+          <option value="{{ value }}" {% if (pref.presentation_preference.value if pref else 'none') == value %}selected{% endif %}>{{ _(labels.presentation[value]) }}</option>
           {% endfor %}
         </select>
       </label>
@@ -35,28 +36,28 @@
   </article>
 {% endmacro %}
 {% block content %}
-<h1>Topics &amp; voting</h1>
+<h1>{{ _("Topics & voting") }}</h1>
 {% if voting_open %}
-  <p class="notice ok">Voting is open. Tell us which optional topics you would like to attend and whether you could present any topic. You can change your answers until voting closes. Other students cannot see your individual choices.</p>
+  <p class="notice ok">{{ _("Voting is open. Tell us which optional topics you would like to attend and whether you could present any topic. You can change your answers until voting closes. Other students cannot see your individual choices.") }}</p>
 {% else %}
-  <p class="notice warn">Voting is closed, so preferences cannot be changed.
-  {% if user.is_organiser %}<a href="/organiser/settings">Open voting</a> when the topic pool is ready.{% endif %}</p>
+  <p class="notice warn">{{ _("Voting is closed, so preferences cannot be changed.") }}
+  {% if user.is_organiser %}<a href="/organiser/settings">{{ _("Open voting") }}</a> {{ _("when the topic pool is ready.") }}{% endif %}</p>
 {% endif %}
 
 {% if not core and not optional %}
-  <p class="muted">There are no topics in the pool yet.</p>
+  <p class="muted">{{ _("There are no topics in the pool yet.") }}</p>
 {% else %}
 <form method="post" action="/topics/preferences">
   {% include "_csrf.html" %}
-  <h2>Core topics</h2>
-  <p class="muted">These are part of the programme whatever the vote. You only need to say whether you could help present one.</p>
-  {% for topic in core %}{{ card(topic, false) }}{% else %}<p class="muted">No core topics yet.</p>{% endfor %}
+  <h2>{{ _("Core topics") }}</h2>
+  <p class="muted">{{ _("These are part of the programme whatever the vote. You only need to say whether you could help present one.") }}</p>
+  {% for topic in core %}{{ card(topic, false) }}{% else %}<p class="muted">{{ _("No core topics yet.") }}</p>{% endfor %}
 
-  <h2>Optional topics</h2>
-  <p class="muted">These compete for the remaining seminar slots, ranked by interest.</p>
-  {% for topic in optional %}{{ card(topic, true) }}{% else %}<p class="muted">No optional topics yet.</p>{% endfor %}
+  <h2>{{ _("Optional topics") }}</h2>
+  <p class="muted">{{ _("These compete for the remaining seminar slots, ranked by interest.") }}</p>
+  {% for topic in optional %}{{ card(topic, true) }}{% else %}<p class="muted">{{ _("No optional topics yet.") }}</p>{% endfor %}
 
-  <div class="actions"><button type="submit" {% if not voting_open %}disabled{% endif %}>Save my preferences</button></div>
+  <div class="actions"><button type="submit" {% if not voting_open %}disabled{% endif %}>{{ _("Save my preferences") }}</button></div>
 </form>
 {% endif %}
 {% endblock %}

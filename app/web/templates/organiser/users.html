@@ -1,47 +1,47 @@
 {% extends "base.html" %}
-{% block title %}Users{% endblock %}
+{% block title %}{{ _("Users") }}{% endblock %}
 {% block content %}
-<h1>Users</h1>
+<h1>{{ _("Users") }}</h1>
 <form method="post" action="/organiser/users" class="card">
   {% include "_csrf.html" %}
-  <h2 style="margin-top:0">Create an account</h2>
+  <h2 style="margin-top:0">{{ _("Create an account") }}</h2>
   <div class="form-grid">
-    <label>Username <input type="text" name="username" maxlength="64" autocomplete="off" required></label>
-    <label>Display name <input type="text" name="display_name" maxlength="100" required></label>
-    <label>Initial password (at least 8 characters) <input type="password" name="password" minlength="8" maxlength="256" autocomplete="new-password" required></label>
-    <label>Role <select name="role"><option value="student">Student</option><option value="organiser">Organiser</option></select></label>
-    <label>Year group (optional, e.g. UG2) <input type="text" name="year_group" maxlength="20"></label>
+    <label>{{ _("Username") }} <input type="text" name="username" maxlength="64" autocomplete="off" required></label>
+    <label>{{ _("Display name") }} <input type="text" name="display_name" maxlength="100" required></label>
+    <label>{{ _("Initial password (at least 8 characters)") }} <input type="password" name="password" minlength="8" maxlength="256" autocomplete="new-password" required></label>
+    <label>{{ _("Role") }} <select name="role"><option value="student">{{ _(labels.role['student']) }}</option><option value="organiser">{{ _(labels.role['organiser']) }}</option></select></label>
+    <label>{{ _("Year group (optional, e.g. UG2)") }} <input type="text" name="year_group" maxlength="20"></label>
   </div>
-  <div class="actions"><button type="submit">Create account</button></div>
+  <div class="actions"><button type="submit">{{ _("Create account") }}</button></div>
 </form>
 
-<h2>Accounts</h2>
+<h2>{{ _("Accounts") }}</h2>
 <div class="table-wrap"><table>
-  <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Year</th><th>Status</th><th>Actions</th></tr></thead>
+  <thead><tr><th>{{ _("Name") }}</th><th>{{ _("Username") }}</th><th>{{ _("Role") }}</th><th>{{ _("Year") }}</th><th>{{ _("Status") }}</th><th>{{ _("Actions") }}</th></tr></thead>
   <tbody>
   {% for a in accounts %}
     <tr>
       <td>{{ a.display_name }}</td>
       <td>{{ a.username }}</td>
-      <td>{{ a.role.value|titlecase }}</td>
+      <td>{{ _(labels.role[a.role.value]) }}</td>
       <td>{{ a.year_group or '' }}</td>
-      <td>{% if a.is_active %}<span class="badge active">Active</span>{% else %}<span class="badge archived">Deactivated</span>{% endif %}</td>
+      <td>{% if a.is_active %}<span class="badge active">{{ _("Active") }}</span>{% else %}<span class="badge archived">{{ _("Deactivated") }}</span>{% endif %}</td>
       <td>
         <form method="post" action="/organiser/users/{{ a.id }}/active" class="inline-form">
           {% include "_csrf.html" %}<input type="hidden" name="active" value="{{ '0' if a.is_active else '1' }}">
-          <button class="link" type="submit">{{ 'Deactivate' if a.is_active else 'Reactivate' }}</button>
+          <button class="link" type="submit">{{ _("Deactivate") if a.is_active else _("Reactivate") }}</button>
         </form>
         ·
         <form method="post" action="/organiser/users/{{ a.id }}/role" class="inline-form">
           {% include "_csrf.html" %}<input type="hidden" name="role" value="{{ 'student' if a.role.value == 'organiser' else 'organiser' }}">
-          <button class="link" type="submit">Make {{ 'student' if a.role.value == 'organiser' else 'organiser' }}</button>
+          <button class="link" type="submit">{{ _("Make student") if a.role.value == 'organiser' else _("Make organiser") }}</button>
         </form>
         <details>
-          <summary>Set a new password</summary>
+          <summary>{{ _("Set a new password") }}</summary>
           <form method="post" action="/organiser/users/{{ a.id }}/password" class="inline-form">
             {% include "_csrf.html" %}
-            <input type="password" name="password" minlength="8" maxlength="256" autocomplete="new-password" aria-label="New password for {{ a.display_name }}" required>
-            <button class="secondary" type="submit">Change</button>
+            <input type="password" name="password" minlength="8" maxlength="256" autocomplete="new-password" aria-label="{{ _('New password for {name}', name=a.display_name) }}" required>
+            <button class="secondary" type="submit">{{ _("Change") }}</button>
           </form>
         </details>
       </td>

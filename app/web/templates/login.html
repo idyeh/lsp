@@ -1,14 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Log in{% endblock %}
+{% block title %}{{ _("Log in") }}{% endblock %}
 {% block content %}
 <div class="login-box card">
-  <h1>Log in</h1>
+  <h1>{{ _("Log in") }}</h1>
   <form method="post" action="/login">
     {% include "_csrf.html" %}
-    <label>Username <input type="text" name="username" autocomplete="username" required autofocus></label>
-    <label style="margin-top:.8rem">Password <input type="password" name="password" autocomplete="current-password" required></label>
-    <div class="actions"><button type="submit">Log in</button></div>
+    <label>{{ _("Username") }} <input type="text" name="username" autocomplete="username" required autofocus></label>
+    <label style="margin-top:.8rem">{{ _("Password") }} <input type="password" name="password" autocomplete="current-password" required></label>
+    <div class="actions"><button type="submit">{{ _("Log in") }}</button></div>
   </form>
-  <p class="muted">Accounts are created by the organisers. Ask one of them if you cannot log in.</p>
+  <p class="muted">{{ _("Accounts are created by the organisers. Ask one of them if you cannot log in.") }}</p>
 </div>
 {% endblock %}

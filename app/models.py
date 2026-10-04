@@ -8,6 +8,7 @@ Deviations from the SRS tables (both additive and nullable):
 All timestamps are stored and exchanged in UTC.
 """
 
+from dataclasses import dataclass
 from datetime import date, datetime, time, timezone
 
 from sqlalchemy import (
@@ -72,6 +73,19 @@ def enum_column(enum_cls):
     )
 
 
+@dataclass(frozen=True)
+class LocalizedTopic:
+    """The text of a topic in one language, with English as the fallback."""
+
+    title: str
+    description: str
+    keyword_list: list[str]
+
+
+def _split_keywords(keywords: str | None) -> list[str]:
+    return [k for k in (keywords or "").split(",") if k]
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -104,9 +118,44 @@ class Topic(Base):
     created_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow)
     updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
 
+    translations: Mapped[list["TopicTranslation"]] = relationship(
+        lazy="selectin", cascade="all, delete-orphan", order_by="TopicTranslation.id"
+    )
+
     @property
     def keyword_list(self) -> list[str]:
-        return [k for k in (self.keywords or "").split(",") if k]
+        return _split_keywords(self.keywords)
+
+    @property
+    def translation_map(self) -> dict[str, "TopicTranslation"]:
+        return {t.language: t for t in self.translations}
+
+    def localized(self, language: str) -> LocalizedTopic:
+        """Title, description and keywords in `language`; the topic's own (English) text if not translated."""
+        translation = self.translation_map.get(language)
+        if translation is None:
+            return LocalizedTopic(self.title, self.description, self.keyword_list)
+        return LocalizedTopic(translation.title, translation.description, translation.keyword_list)
+
+
+class TopicTranslation(Base):
+    """The text of a topic in another language. A new table, so existing databases gain it
+    automatically on start-up without altering any existing table."""
+
+    __tablename__ = "topic_translations"
+    __table_args__ = (UniqueConstraint("topic_id", "language", name="uq_translation_topic_language"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    topic_id: Mapped[int] = mapped_column(ForeignKey("topics.id"), index=True)
+    language: Mapped[str] = mapped_column(String(8))
+    title: Mapped[str] = mapped_column(String(200))
+    description: Mapped[str] = mapped_column(Text)
+    keywords: Mapped[str | None] = mapped_column(Text)  # comma-separated
+    updated_at: Mapped[datetime] = mapped_column(UTCDateTime, default=utcnow, onupdate=utcnow)
+
+    @property
+    def keyword_list(self) -> list[str]:
+        return _split_keywords(self.keywords)
 
 
 class TopicProposal(Base):

@@ -8,6 +8,7 @@ from app.enums import Role
 from app.errors import AppError
 from app.models import User
 from app.security import hash_password, verify_password
+from app.i18n import N_
 
 MIN_PASSWORD_LENGTH = 8
 MAX_PASSWORD_LENGTH = 256
@@ -22,7 +23,9 @@ def _check_password(password: str) -> None:
         raise AppError(
             422,
             "WEAK_PASSWORD",
-            f"Password must be between {MIN_PASSWORD_LENGTH} and {MAX_PASSWORD_LENGTH} characters.",
+            N_("Password must be between {min} and {max} characters."),
+            min=MIN_PASSWORD_LENGTH,
+            max=MAX_PASSWORD_LENGTH,
         )
 
 
@@ -30,14 +33,14 @@ def authenticate(db: Session, username: str, password: str) -> User:
     user = db.scalar(select(User).where(User.username == normalise_username(username)))
     valid = verify_password(user.password_hash if user else None, password)
     if not (user and valid and user.is_active):
-        raise AppError(401, "AUTH_INVALID_CREDENTIALS", "Invalid username or password.")
+        raise AppError(401, "AUTH_INVALID_CREDENTIALS", N_("Invalid username or password."))
     return user
 
 
 def get_user(db: Session, user_id: int) -> User:
     user = db.get(User, user_id)
     if user is None:
-        raise AppError(404, "USER_NOT_FOUND", "User not found.")
+        raise AppError(404, "USER_NOT_FOUND", N_("User not found."))
     return user
 
 
@@ -56,12 +59,12 @@ def create_user(
     username = normalise_username(username)
     display_name = display_name.strip()
     if not username or len(username) > 64 or any(c.isspace() for c in username):
-        raise AppError(422, "VALIDATION_ERROR", "Username must be 1-64 characters without spaces.")
+        raise AppError(422, "VALIDATION_ERROR", N_("Username must be 1-64 characters without spaces."))
     if not display_name or len(display_name) > 100:
-        raise AppError(422, "VALIDATION_ERROR", "Display name must be 1-100 characters.")
+        raise AppError(422, "VALIDATION_ERROR", N_("Display name must be 1-100 characters."))
     year_group = (year_group or "").strip() or None
     if year_group and len(year_group) > 20:
-        raise AppError(422, "VALIDATION_ERROR", "Year group must be at most 20 characters.")
+        raise AppError(422, "VALIDATION_ERROR", N_("Year group must be at most 20 characters."))
     _check_password(password)
     user = User(
         username=username,
@@ -75,7 +78,7 @@ def create_user(
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise AppError(409, "DUPLICATE_USER", f"Username '{username}' is already taken.") from None
+        raise AppError(409, "DUPLICATE_USER", N_("Username '{username}' is already taken."), username=username) from None
     return user
 
 
@@ -83,6 +86,15 @@ def set_password(db: Session, user: User, password: str) -> None:
     _check_password(password)
     user.password_hash = hash_password(password)
     db.commit()
+
+
+def change_password(db: Session, user: User, current_password: str, new_password: str) -> None:
+    """Self-service change: the user must prove they know the current password."""
+    if not verify_password(user.password_hash, current_password):
+        raise AppError(403, "AUTH_INVALID_CREDENTIALS", N_("The current password is incorrect."))
+    if new_password == current_password:
+        raise AppError(422, "PASSWORD_UNCHANGED", N_("The new password must be different from the current one."))
+    set_password(db, user, new_password)
 
 
 def _active_organiser_count(db: Session) -> int:
@@ -98,13 +110,13 @@ def _is_last_active_organiser(db: Session, user: User) -> bool:
 def set_active(db: Session, user: User, is_active: bool) -> None:
     # Never lock everyone out of organiser functions: accounts are managed in the UI, not the database.
     if not is_active and _is_last_active_organiser(db, user):
-        raise AppError(409, "LAST_ORGANISER", "The last active organiser cannot be deactivated.")
+        raise AppError(409, "LAST_ORGANISER", N_("The last active organiser cannot be deactivated."))
     user.is_active = is_active
     db.commit()
 
 
 def set_role(db: Session, user: User, role: Role) -> None:
     if role != Role.organiser and _is_last_active_organiser(db, user):
-        raise AppError(409, "LAST_ORGANISER", "The last active organiser cannot be made a student.")
+        raise AppError(409, "LAST_ORGANISER", N_("The last active organiser cannot be made a student."))
     user.role = role
     db.commit()

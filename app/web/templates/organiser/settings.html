@@ -1,31 +1,32 @@
 {% extends "base.html" %}
-{% block title %}Settings &amp; voting{% endblock %}
+{% block title %}{{ _("Settings & voting") }}{% endblock %}
 {% block content %}
-<h1>Settings &amp; voting</h1>
+<h1>{{ _("Settings & voting") }}</h1>
 
 <section class="card">
-  <h2 style="margin-top:0">Voting</h2>
-  <p>Voting is currently <strong>{{ 'open' if settings.voting_open else 'closed' }}</strong>. While it is closed, nobody can change their interest or presentation preferences. Proposals can still be submitted.</p>
+  <h2 style="margin-top:0">{{ _("Voting") }}</h2>
+  <p>{{ _("Voting is currently open.") if settings.voting_open else _("Voting is currently closed.") }} {{ _("While it is closed, nobody can change their interest or presentation preferences. Proposals can still be submitted.") }}</p>
   <form method="post" action="/organiser/settings/voting">
     {% include "_csrf.html" %}
     <input type="hidden" name="open" value="{{ '0' if settings.voting_open else '1' }}">
-    <button type="submit" {% if settings.voting_open %}class="danger"{% endif %}>{{ 'Close voting' if settings.voting_open else 'Open voting' }}</button>
+    <button type="submit" {% if settings.voting_open %}class="danger"{% endif %}>{{ _("Close voting") if settings.voting_open else _("Open voting") }}</button>
   </form>
 </section>
 
 <form method="post" action="/organiser/settings" class="card">
   {% include "_csrf.html" %}
-  <h2 style="margin-top:0">Semester</h2>
+  <h2 style="margin-top:0">{{ _("Semester") }}</h2>
   <div class="form-grid">
-    <label class="wide">Semester name <input type="text" name="semester_name" maxlength="100" value="{{ settings.semester_name }}" required></label>
-    <label>Total sessions <input type="number" name="target_session_count" min="0" max="50" value="{{ settings.target_session_count }}" required></label>
-    <label>Core sessions <input type="number" name="target_core_count" min="0" max="50" value="{{ settings.target_core_count }}" required></label>
-    <label>Optional sessions <input type="number" name="target_optional_count" min="0" max="50" value="{{ settings.target_optional_count }}" required></label>
-    <label class="wide">Topic categories (one per line; lowercase letters, digits and hyphens)
-      <textarea name="categories" rows="10" required>{{ settings.categories|join('\n') }}</textarea>
+    <label>{{ _("Semester name") }} <input type="text" name="semester_name" maxlength="100" value="{{ settings.semester_name }}" required></label>
+    <label>{{ _("Semester name in Chinese (optional)") }} <input type="text" name="semester_name_zh" maxlength="100" lang="zh" value="{{ settings.semester_name_zh }}"></label>
+    <label>{{ _("Total sessions") }} <input type="number" name="target_session_count" min="0" max="50" value="{{ settings.target_session_count }}" required></label>
+    <label>{{ _("Core sessions") }} <input type="number" name="target_core_count" min="0" max="50" value="{{ settings.target_core_count }}" required></label>
+    <label>{{ _("Optional sessions") }} <input type="number" name="target_optional_count" min="0" max="50" value="{{ settings.target_optional_count }}" required></label>
+    <label class="wide">{{ _("Topic categories: one per line, as: identifier | English name | Chinese name (the names are optional)") }}
+      <textarea name="categories" rows="12" required>{{ category_lines }}</textarea>
     </label>
   </div>
-  <p class="muted">Removing a category does not change topics that already use it; it only stops it being chosen for new or re-categorised topics.</p>
-  <div class="actions"><button type="submit">Save settings</button></div>
+  <p class="muted">{{ _("Identifiers use lowercase letters, digits and hyphens. Removing a category does not change topics that already use it; it only stops it being chosen for new or re-categorised topics.") }}</p>
+  <div class="actions"><button type="submit">{{ _("Save settings") }}</button></div>
 </form>
 {% endblock %}

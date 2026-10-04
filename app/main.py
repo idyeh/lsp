@@ -15,6 +15,7 @@ from app.api import api_router
 from app.config import Settings, load_settings
 from app.database import init_db, make_engine, make_sessionmaker
 from app.errors import AppError
+from app.i18n import N_
 from app.web import web_router
 
 logger = logging.getLogger(__name__)
@@ -33,39 +34,53 @@ def _is_api(request: Request) -> bool:
     return request.url.path.startswith("/api/") or request.url.path == "/api"
 
 
-def _respond(request: Request, status_code: int, code: str, message: str, details: list | None = None):
-    """JSON error body for the API; redirect or HTML error page for the web UI."""
+def _respond(
+    request: Request,
+    status_code: int,
+    code: str,
+    message: str,
+    details: list | None = None,
+    *,
+    template: str | None = None,
+    params: dict | None = None,
+):
+    """JSON error body (English) for the API; redirect or translated HTML error page for the web UI."""
     if _is_api(request):
         return JSONResponse(_error_body(code, message, details), status_code=status_code)
     if status_code == 401:
         return RedirectResponse("/login", status_code=303)
     from app.web.common import render_error  # imported lazily: the web layer imports this package
 
-    return render_error(request, status_code, message)
+    return render_error(request, status_code, template or message, **(params or {}))
 
 
 def register_error_handlers(app: FastAPI) -> None:
     @app.exception_handler(AppError)
     async def handle_app_error(request: Request, exc: AppError):
-        return _respond(request, exc.status_code, exc.code, exc.message)
+        return _respond(
+            request, exc.status_code, exc.code, exc.message, template=exc.template, params=exc.params
+        )
 
     @app.exception_handler(RequestValidationError)
     async def handle_validation_error(request: Request, exc: RequestValidationError):
         details = [
             {"field": ".".join(str(part) for part in err["loc"]), "message": err["msg"]} for err in exc.errors()
         ]
-        return _respond(request, 422, "VALIDATION_ERROR", "The request data is invalid.", details)
+        return _respond(request, 422, "VALIDATION_ERROR", N_("The request data is invalid."), details)
 
     @app.exception_handler(StarletteHTTPException)
     async def handle_http_error(request: Request, exc: StarletteHTTPException):
         codes = {404: "NOT_FOUND", 405: "METHOD_NOT_ALLOWED"}
-        return _respond(request, exc.status_code, codes.get(exc.status_code, "HTTP_ERROR"), str(exc.detail))
+        messages = {404: N_("Page not found."), 405: N_("This action is not available.")}
+        message = messages.get(exc.status_code, N_("Something went wrong."))
+        api_message = str(exc.detail) if _is_api(request) else message
+        return _respond(request, exc.status_code, codes.get(exc.status_code, "HTTP_ERROR"), api_message, template=message)
 
     @app.exception_handler(Exception)
     async def handle_unexpected_error(request: Request, exc: Exception):
         # Details go to the log only; the client gets a generic message.
         logger.exception("Unhandled error on %s %s", request.method, request.url.path)
-        return _respond(request, 500, "INTERNAL_ERROR", "Something went wrong on the server.")
+        return _respond(request, 500, "INTERNAL_ERROR", N_("Something went wrong on the server."))
 
 
 @asynccontextmanager

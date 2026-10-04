@@ -1,7 +1,7 @@
 """Pydantic models: request validation and JSON responses (SRS section 8)."""
 
 from datetime import date, datetime, time
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, StrictInt, StringConstraints
 
@@ -67,6 +67,11 @@ class LoginRequest(BaseModel):
     password: Annotated[str, StringConstraints(min_length=1, max_length=256)]
 
 
+class PasswordChange(BaseModel):
+    current_password: Annotated[str, StringConstraints(min_length=1, max_length=256)]
+    new_password: Annotated[str, StringConstraints(min_length=1, max_length=256)]
+
+
 class UserOut(ORMModel):
     id: int
     username: str
@@ -81,6 +86,21 @@ class LoginResponse(BaseModel):
 # --- topics -----------------------------------------------------------------
 
 
+Language = Literal["en", "zh"]  # must match app.i18n.LANGUAGES (checked by a test)
+
+
+class TopicTranslationIn(BaseModel):
+    title: Title
+    description: Description
+    keywords: Keywords = []
+
+
+class TopicTranslationOut(ORMModel):
+    title: str
+    description: str
+    keywords: list[str] = Field(validation_alias="keyword_list")
+
+
 class TopicOut(ORMModel):
     id: int
     title: str
@@ -89,6 +109,7 @@ class TopicOut(ORMModel):
     topic_type: TopicType
     keywords: list[str] = Field(validation_alias="keyword_list")
     status: TopicStatus
+    translations: dict[Language, TopicTranslationOut] = Field(default_factory=dict, validation_alias="translation_map")
 
 
 class TopicCreate(BaseModel):
@@ -98,6 +119,7 @@ class TopicCreate(BaseModel):
     topic_type: TopicType = TopicType.optional
     keywords: Keywords = []
     status: TopicStatus = TopicStatus.draft
+    translations: dict[Language, TopicTranslationIn | None] = {}
 
 
 class TopicUpdate(BaseModel):
@@ -109,6 +131,8 @@ class TopicUpdate(BaseModel):
     topic_type: TopicType | None = None
     keywords: Keywords | None = None
     status: TopicStatus | None = None
+    # Per language: a translation replaces the stored one, null removes it; languages not listed are untouched.
+    translations: dict[Language, TopicTranslationIn | None] | None = None
 
 
 class TopicSummaryOut(TopicOut):
@@ -309,11 +333,13 @@ class AttendanceEntryOut(BaseModel):
 
 class SettingsOut(BaseModel):
     semester_name: str
+    semester_name_zh: str
     voting_open: bool
     target_session_count: int
     target_core_count: int
     target_optional_count: int
     categories: list[str]
+    category_labels: dict[str, dict[str, str]]
 
 
 class SettingsUpdate(BaseModel):
@@ -323,3 +349,5 @@ class SettingsUpdate(BaseModel):
     target_core_count: Annotated[int, Field(ge=0, le=50)] | None = None
     target_optional_count: Annotated[int, Field(ge=0, le=50)] | None = None
     categories: list[str] | None = None
+    semester_name_zh: Annotated[str, StringConstraints(strip_whitespace=True, max_length=100)] | None = None
+    category_labels: dict[str, dict[str, str]] | None = None

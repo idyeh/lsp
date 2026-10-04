@@ -10,45 +10,7 @@ from app.enums import SessionStatus, TopicType
 from app.models import Preference, SeminarSession, Topic, User
 from app.web import web_router
 from tests.conftest import PASSWORD
-
-CSRF = re.compile(r'name="csrf_token" value="([^"]+)"')
-
-
-def visible_text(html):
-    """The page text with tags removed and whitespace collapsed, so tests do not depend on markup."""
-    return " ".join(re.sub(r"<[^>]+>", " ", html).split())
-
-
-class Browser:
-    """A cookie-keeping client that fills in the CSRF token the way a real page would."""
-
-    def __init__(self, app):
-        self.client = TestClient(app, follow_redirects=False)
-
-    def token(self, page="/login"):
-        response = self.client.get(page)
-        assert response.status_code == 200, (page, response.status_code)
-        return CSRF.search(response.text).group(1)
-
-    def get(self, url, **kw):
-        return self.client.get(url, **kw)
-
-    def post(self, url, data=None, page=None, **kw):
-        data = dict(data or {})
-        data.setdefault("csrf_token", self.token(page or "/topics" if self.logged_in else "/login"))
-        return self.client.post(url, data=data, **kw)
-
-    def follow(self, response):
-        assert response.status_code == 303, response.status_code
-        return self.client.get(response.headers["location"])
-
-    logged_in = False
-
-    def login(self, user, password=PASSWORD):
-        response = self.post("/login", {"username": user.username, "password": password})
-        self.logged_in = response.status_code == 303 and response.headers["location"] == "/"
-        return response
-
+from tests.helpers import visible_text
 
 def web_post_paths():
     """Every POST route of the web UI, found by walking the router (so new routes are covered automatically)."""
@@ -61,22 +23,6 @@ def web_post_paths():
         elif "POST" in getattr(route, "methods", ()):
             paths.add(route.path)
     return sorted(paths)
-
-
-@pytest.fixture
-def browser(app):
-    created = []
-
-    def _browser(user=None):
-        b = Browser(app)
-        created.append(b)
-        if user:
-            assert b.login(user).headers["location"] == "/"
-        return b
-
-    yield _browser
-    for b in created:
-        b.client.close()
 
 
 # --- login and access control -----------------------------------------------
@@ -332,7 +278,7 @@ def test_invalid_topic_form_shows_an_error_and_creates_nothing(browser, db, orga
 def test_organiser_opens_and_closes_voting(browser, organiser, student):
     o = browser(organiser)
     assert "Voting is now open" in o.follow(o.post("/organiser/settings/voting", {"open": "1"})).text
-    assert "Voting is <strong>open</strong>" in browser(student).get("/topics").text
+    assert "Voting is open" in visible_text(browser(student).get("/topics").text)
     assert "Voting is now closed" in o.follow(o.post("/organiser/settings/voting", {"open": "0"})).text
 
 
@@ -386,7 +332,7 @@ def test_planning_to_attendance_end_to_end(browser, db, voting_open, organiser, 
     o, s = browser(organiser), browser(student)
     o.post("/organiser/settings", {"semester_name": "S1", "target_session_count": "2", "target_core_count": "1", "target_optional_count": "1", "categories": "open-topic"})
     page = o.get("/organiser/planning").text
-    assert "Recommended" in page and "NO_PRESENTER" in page  # core topic has nobody to present it
+    assert "Recommended" in page and "No presenter" in page  # core topic has nobody to present it
 
     response = o.post("/organiser/planning/sessions", {"topic_id": [str(core.id), str(popular.id)], f"week_{core.id}": "2", f"week_{popular.id}": ""})
     assert "Created 2 provisional session(s)" in o.follow(response).text

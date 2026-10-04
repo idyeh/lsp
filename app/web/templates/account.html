@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Account") }}{% endblock %}
+{% block content %}
+<h1>{{ _("Account") }}</h1>
+<p class="muted">{{ _("Signed in as {name} ({username}).", name=user.display_name, username=user.username) }}</p>
+
+<form method="post" action="/account/password" class="card" style="max-width:32rem">
+  {% include "_csrf.html" %}
+  <h2 style="margin-top:0">{{ _("Change your password") }}</h2>
+  <label>{{ _("Current password") }} <input type="password" name="current_password" autocomplete="current-password" required></label>
+  <label style="margin-top:.8rem">{{ _("New password (at least 8 characters)") }} <input type="password" name="new_password" minlength="8" maxlength="256" autocomplete="new-password" required></label>
+  <label style="margin-top:.8rem">{{ _("Repeat the new password") }} <input type="password" name="confirm_password" minlength="8" maxlength="256" autocomplete="new-password" required></label>
+  <p class="muted">{{ _("Changing your password signs you out on all your other devices.") }}</p>
+  <div class="actions"><button type="submit">{{ _("Change password") }}</button></div>
+</form>
+{% endblock %}

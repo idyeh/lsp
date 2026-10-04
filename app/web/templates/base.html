@@ -1,43 +1,53 @@
 <!doctype html>
-<html lang="en">
+<html lang="{{ html_lang }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}{% endblock %} · Lab Seminar Planner</title>
+  <title>{% block title %}{% endblock %} · {{ _("Lab Seminar Planner") }}</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="/static/style.css?v={{ asset_version }}">
 </head>
 <body>
 <header class="site-header">
   <div class="wrap">
-    <a class="brand" href="/">Lab Seminar Planner</a>
+    <a class="brand" href="/">{{ _("Lab Seminar Planner") }}</a>
     {% if user %}
-    <nav aria-label="Main">
-      <a href="/topics" {% if path.startswith('/topics') %}class="active"{% endif %}>Topics &amp; voting</a>
-      <a href="/results" {% if path == '/results' %}class="active"{% endif %}>Results</a>
-      <a href="/proposals" {% if path == '/proposals' %}class="active"{% endif %}>Propose a topic</a>
-      <a href="/plan" {% if path == '/plan' %}class="active"{% endif %}>Semester plan</a>
+    <nav aria-label="{{ _('Main') }}">
+      <a href="/topics" {% if path.startswith('/topics') %}class="active"{% endif %}>{{ _("Topics & voting") }}</a>
+      <a href="/results" {% if path == '/results' %}class="active"{% endif %}>{{ _("Results") }}</a>
+      <a href="/proposals" {% if path == '/proposals' %}class="active"{% endif %}>{{ _("Propose a topic") }}</a>
+      <a href="/plan" {% if path == '/plan' %}class="active"{% endif %}>{{ _("Semester plan") }}</a>
     </nav>
-    <div class="who">
-      <span>{{ user.display_name }}{% if user.is_organiser %} <span class="badge">organiser</span>{% endif %}</span>
-      <form method="post" action="/logout" class="inline-form">{% include "_csrf.html" %}<button class="secondary" type="submit">Log out</button></form>
-    </div>
     {% endif %}
+    <div class="header-end">
+      {% if user %}
+      <a href="/account" title="{{ _('Account and password') }}" {% if path == '/account' %}class="active"{% endif %}>{{ user.display_name }}</a>
+      {% if user.is_organiser %}<span class="badge">{{ _(labels.role['organiser']) }}</span>{% endif %}
+      <form method="post" action="/logout" class="inline-form">{% include "_csrf.html" %}<button class="secondary" type="submit">{{ _("Log out") }}</button></form>
+      {% endif %}
+      <form method="post" action="/language" class="lang-switch inline-form">
+        {% include "_csrf.html" %}
+        <input type="hidden" name="next" value="{{ current_url }}">
+        {% for code, name in languages.items() %}
+        <button type="submit" name="lang" value="{{ code }}" lang="{{ code }}" class="link {% if code == lang %}current{% endif %}" {% if code == lang %}aria-current="true"{% endif %}>{{ name }}</button>
+        {% endfor %}
+      </form>
+    </div>
   </div>
   {% if user and user.is_organiser %}
   <div class="nav-organiser"><div class="wrap">
-    <strong>Organiser:</strong>
-    <a href="/organiser/topics">Topics</a>
-    <a href="/organiser/proposals">Proposals</a>
-    <a href="/organiser/planning">Planning &amp; sessions</a>
-    <a href="/organiser/settings">Settings &amp; voting</a>
-    <a href="/organiser/users">Users</a>
+    <strong>{{ _("Organiser:") }}</strong>
+    <a href="/organiser/topics">{{ _("Topics") }}</a>
+    <a href="/organiser/proposals">{{ _("Proposals") }}</a>
+    <a href="/organiser/planning">{{ _("Planning & sessions") }}</a>
+    <a href="/organiser/settings">{{ _("Settings & voting") }}</a>
+    <a href="/organiser/users">{{ _("Users") }}</a>
   </div></div>
   {% endif %}
 </header>
 <main class="wrap">
   {% if user and settings %}
-  <div class="status-line">{{ settings.semester_name }} · Voting is <strong>{{ 'open' if settings.voting_open else 'closed' }}</strong></div>
+  <div class="status-line">{{ semester_name }} · <span class="voting-state">{{ _("Voting is open") if settings.voting_open else _("Voting is closed") }}</span></div>
   {% endif %}
   {% for level, message in flashes %}<div class="flash {{ level }}" role="status">{{ message }}</div>{% endfor %}
   {% block content %}{% endblock %}

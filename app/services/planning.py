@@ -31,7 +31,8 @@ ALTERNATIVES_COUNT = 2
 class PlanWarning:
     topic_id: int | None
     type: str
-    message: str
+    message: str  # English, with the topic title; this is what the API returns
+    params: dict = field(default_factory=dict)  # numbers used by the general warnings, for translated display
 
 
 @dataclass
@@ -97,13 +98,21 @@ def build_plan(
     if len(plan.core) != target_core:
         plan.warnings.append(
             PlanWarning(
-                None, "CORE_COUNT_MISMATCH", f"There are {len(plan.core)} active core topics; the target is {target_core}."
+                None,
+                "CORE_COUNT_MISMATCH",
+                f"There are {len(plan.core)} active core topics; the target is {target_core}.",
+                {"found": len(plan.core), "target": target_core},
             )
         )
     planned = len(plan.core) + len(plan.recommended)
     if planned != target_total:
         plan.warnings.append(
-            PlanWarning(None, "TARGET_TOTAL_MISMATCH", f"The plan has {planned} sessions; the target is {target_total}.")
+            PlanWarning(
+                None,
+                "TARGET_TOTAL_MISMATCH",
+                f"The plan has {planned} sessions; the target is {target_total}.",
+                {"planned": planned, "target": target_total},
+            )
         )
     return plan
 

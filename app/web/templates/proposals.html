@@ -1,49 +1,49 @@
 {% extends "base.html" %}
-{% block title %}Propose a topic{% endblock %}
+{% block title %}{{ _("Propose a topic") }}{% endblock %}
 {% block content %}
-<h1>Propose a topic</h1>
-<p class="muted">Suggest a seminar or workshop topic. An organiser will review it before it appears in the voting pool.</p>
+<h1>{{ _("Propose a topic") }}</h1>
+<p class="muted">{{ _("Suggest a seminar or workshop topic. An organiser will review it before it appears in the voting pool.") }}</p>
 <form method="post" action="/proposals" class="card">
   {% include "_csrf.html" %}
   <div class="form-grid">
-    <label class="wide">Title <input type="text" name="title" maxlength="200" required></label>
-    <label class="wide">Short description <textarea name="description" maxlength="5000" required></textarea></label>
-    <label>Category (optional)
-      <select name="category"><option value="">–</option>{% for c in categories %}<option value="{{ c }}">{{ c|category_label }}</option>{% endfor %}</select>
+    <label class="wide">{{ _("Title") }} <input type="text" name="title" maxlength="200" required></label>
+    <label class="wide">{{ _("Short description") }} <textarea name="description" maxlength="5000" required></textarea></label>
+    <label>{{ _("Category (optional)") }}
+      <select name="category"><option value="">–</option>{% for c in categories %}<option value="{{ c }}">{{ CL(c) }}</option>{% endfor %}</select>
     </label>
-    <label>Keywords (comma-separated) <input type="text" name="keywords"></label>
-    <label class="wide">Why might this be useful or interesting? (optional) <textarea name="rationale" maxlength="2000"></textarea></label>
+    <label>{{ _("Keywords (comma-separated)") }} <input type="text" name="keywords"></label>
+    <label class="wide">{{ _("Why might this be useful or interesting? (optional)") }} <textarea name="rationale" maxlength="2000"></textarea></label>
   </div>
-  <div class="actions"><button type="submit">Submit proposal</button></div>
+  <div class="actions"><button type="submit">{{ _("Submit proposal") }}</button></div>
 </form>
 
-<h2>Your proposals</h2>
+<h2>{{ _("Your proposals") }}</h2>
 {% for p in proposals %}
 <article class="card">
-  <div class="card-head"><h3>{{ p.title }}</h3><span class="badge {{ p.status.value }}">{{ p.status.value|titlecase }}</span></div>
+  <div class="card-head"><h3>{{ p.title }}</h3><span class="badge {{ p.status.value }}">{{ _(labels.proposal_status[p.status.value]) }}</span></div>
   {% if p.status.value == 'pending' %}
   <details>
-    <summary>Edit</summary>
+    <summary>{{ _("Edit") }}</summary>
     <form method="post" action="/proposals/{{ p.id }}/edit">
       {% include "_csrf.html" %}
       <div class="form-grid">
-        <label class="wide">Title <input type="text" name="title" value="{{ p.title }}" maxlength="200" required></label>
-        <label class="wide">Short description <textarea name="description" maxlength="5000" required>{{ p.description }}</textarea></label>
-        <label>Category
-          <select name="category"><option value="">–</option>{% for c in categories %}<option value="{{ c }}" {% if p.category == c %}selected{% endif %}>{{ c|category_label }}</option>{% endfor %}</select>
+        <label class="wide">{{ _("Title") }} <input type="text" name="title" value="{{ p.title }}" maxlength="200" required></label>
+        <label class="wide">{{ _("Short description") }} <textarea name="description" maxlength="5000" required>{{ p.description }}</textarea></label>
+        <label>{{ _("Category") }}
+          <select name="category"><option value="">–</option>{% for c in categories %}<option value="{{ c }}" {% if p.category == c %}selected{% endif %}>{{ CL(c) }}</option>{% endfor %}</select>
         </label>
-        <label>Keywords <input type="text" name="keywords" value="{{ p.keyword_list|join(', ') }}"></label>
-        <label class="wide">Rationale <textarea name="rationale" maxlength="2000">{{ p.rationale or '' }}</textarea></label>
+        <label>{{ _("Keywords") }} <input type="text" name="keywords" value="{{ p.keyword_list|join(', ') }}"></label>
+        <label class="wide">{{ _("Rationale") }} <textarea name="rationale" maxlength="2000">{{ p.rationale or '' }}</textarea></label>
       </div>
-      <div class="actions"><button type="submit">Save changes</button></div>
+      <div class="actions"><button type="submit">{{ _("Save changes") }}</button></div>
     </form>
   </details>
   {% else %}
   <p>{{ p.description }}</p>
   {% endif %}
-  {% if p.review_note %}<p class="notice"><strong>Organiser's note:</strong> {{ p.review_note }}</p>{% endif %}
+  {% if p.review_note %}<p class="notice"><strong>{{ _("Organiser's note:") }}</strong> {{ p.review_note }}</p>{% endif %}
 </article>
 {% else %}
-<p class="muted">You have not proposed any topics yet.</p>
+<p class="muted">{{ _("You have not proposed any topics yet.") }}</p>
 {% endfor %}
 {% endblock %}

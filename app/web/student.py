@@ -2,15 +2,16 @@
 
 from fastapi import APIRouter, Request
 
-from app.deps import CurrentUser, Db
+from app.deps import CurrentUser, Db, start_session
 from app.enums import AttendanceIntention, TopicStatus, TopicType
 from app.errors import AppError
 from app.schemas import ProposalCreate, ProposalUpdate, parse_keywords
-from app.services import preferences, proposals, sessions, topics
+from app.services import preferences, proposals, sessions, topics, users
 from app.services import settings as settings_service
 from app.services.preferences import PreferenceChange
 from app.services.results import compute_results, volunteers_by_topic
 from app.web.common import Form, action, blank_to_none, form_int, redirect, render, text
+from app.i18n import N_
 
 router = APIRouter()
 
@@ -34,7 +35,7 @@ def topic_pool(request: Request, db: Db, user: CurrentUser):
 @router.post("/topics/preferences")
 def save_preferences(request: Request, db: Db, user: CurrentUser, form: Form):
     """Save the whole voting form at once. Topics without form fields are left untouched."""
-    with action(request, "Your preferences were saved."):
+    with action(request, N_("Your preferences were saved.")):
         changes = []
         for topic in topics.list_pool(db):
             if topic.status != TopicStatus.active or f"presenting_{topic.id}" not in form:
@@ -44,7 +45,7 @@ def save_preferences(request: Request, db: Db, user: CurrentUser, form: Form):
                 interest = form_int(
                     form,
                     f"interest_{topic.id}",
-                    AppError(422, "INVALID_INTEREST_LEVEL", "Interest level must be 0, 1, 2 or 3."),
+                    AppError(422, "INVALID_INTEREST_LEVEL", N_("Interest level must be 0, 1, 2 or 3.")),
                 )
             changes.append(PreferenceChange(topic.id, interest, text(form, f"presenting_{topic.id}")))
         preferences.save_preferences(db, user, changes)
@@ -80,7 +81,7 @@ def my_proposals(request: Request, db: Db, user: CurrentUser):
 
 @router.post("/proposals")
 def submit_proposal(request: Request, db: Db, user: CurrentUser, form: Form):
-    with action(request, "Thank you! Your proposal was submitted for review."):
+    with action(request, N_("Thank you! Your proposal was submitted for review.")):
         data = ProposalCreate(
             title=text(form, "title"),
             description=text(form, "description"),
@@ -94,7 +95,7 @@ def submit_proposal(request: Request, db: Db, user: CurrentUser, form: Form):
 
 @router.post("/proposals/{proposal_id}/edit")
 def edit_proposal(proposal_id: int, request: Request, db: Db, user: CurrentUser, form: Form):
-    with action(request, "Proposal updated."):
+    with action(request, N_("Proposal updated.")):
         proposal = proposals.get_proposal(db, proposal_id, user)
         data = ProposalUpdate(
             title=text(form, "title"),
@@ -114,10 +115,26 @@ def semester_plan(request: Request, db: Db, user: CurrentUser):
 
 @router.post("/sessions/{session_id}/attendance")
 def record_attendance(session_id: int, request: Request, db: Db, user: CurrentUser, form: Form):
-    with action(request, "Your expected attendance was saved."):
+    with action(request, N_("Your expected attendance was saved.")):
         try:
             intention = AttendanceIntention(text(form, "intention"))
         except ValueError:
-            raise AppError(422, "VALIDATION_ERROR", "Please choose one of the attendance options.") from None
+            raise AppError(422, "VALIDATION_ERROR", N_("Please choose one of the attendance options.")) from None
         sessions.record_attendance(db, user, session_id, intention)
     return redirect("/plan")
+
+
+@router.get("/account")
+def account(request: Request, db: Db, user: CurrentUser):
+    return render(request, db, "account.html", user)
+
+
+@router.post("/account/password")
+def change_password(request: Request, db: Db, user: CurrentUser, form: Form):
+    with action(request, N_("Your password was changed.")):
+        new_password = str(form.get("new_password", ""))
+        if new_password != str(form.get("confirm_password", "")):
+            raise AppError(422, "VALIDATION_ERROR", N_("The new passwords do not match."))
+        users.change_password(db, user, str(form.get("current_password", "")), new_password)
+        start_session(request, user)  # this session carries on; the user's other sessions are now invalid
+    return redirect("/account")

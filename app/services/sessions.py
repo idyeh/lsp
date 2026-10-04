@@ -23,6 +23,7 @@ from app.errors import AppError
 from app.models import AttendanceIntent, SeminarSession, SessionPresenter, Topic, User
 from app.schemas import MAX_TEACHING_WEEK, MIN_TEACHING_WEEK, SessionCreate
 from app.services import topics as topic_service
+from app.i18n import STATUS_WORD, N_
 
 ALLOWED_TRANSITIONS: dict[SessionStatus, set[SessionStatus]] = {
     SessionStatus.proposed: {SessionStatus.confirmed, SessionStatus.cancelled},
@@ -43,21 +44,25 @@ class SessionView:
     my_intention: AttendanceIntention | None
 
 
-def _invalid_state(message: str) -> AppError:
-    return AppError(409, "INVALID_SESSION_STATE", message)
+def _invalid_state(message: str, **params) -> AppError:
+    return AppError(409, "INVALID_SESSION_STATE", message, **params)
 
 
 def _require_timing(status: SessionStatus, week: int | None, session_date: date | None) -> None:
     if status in NEEDS_TIMING and week is None and session_date is None:
-        raise _invalid_state(f"A session needs a teaching week or a date before it can be {status.value}.")
+        raise _invalid_state(
+            N_("A session needs a teaching week or a date before it can be {status}."), status=STATUS_WORD[status.value]
+        )
 
 
 def _schedulable_topic(db: Session, topic_id: int) -> Topic:
     topic = db.get(Topic, topic_id)
     if topic is None:
-        raise AppError(404, "TOPIC_NOT_FOUND", "Topic not found.")
+        raise AppError(404, "TOPIC_NOT_FOUND", N_("Topic not found."))
     if topic.status not in topic_service.SCHEDULABLE:
-        raise AppError(409, "INVALID_TOPIC_STATE", f"A {topic.status.value} topic cannot be scheduled.")
+        raise AppError(
+            409, "INVALID_TOPIC_STATE", N_("A {status} topic cannot be scheduled."), status=STATUS_WORD[topic.status.value]
+        )
     return topic
 
 
@@ -67,7 +72,7 @@ def _schedulable_topic(db: Session, topic_id: int) -> Topic:
 def get_session(db: Session, session_id: int) -> SeminarSession:
     session = db.get(SeminarSession, session_id)
     if session is None:
-        raise AppError(404, "SESSION_NOT_FOUND", "Session not found.")
+        raise AppError(404, "SESSION_NOT_FOUND", N_("Session not found."))
     return session
 
 
@@ -139,7 +144,7 @@ def get_session_view(db: Session, session_id: int, viewer: User) -> SessionView:
 def create_session(db: Session, actor: User, data: SessionCreate) -> SeminarSession:
     _schedulable_topic(db, data.topic_id)
     if data.status not in INITIAL_STATUSES:
-        raise _invalid_state("A new session must be proposed or confirmed.")
+        raise _invalid_state(N_("A new session must be proposed or confirmed."))
     _require_timing(data.status, data.teaching_week, data.session_date)
     session = SeminarSession(
         topic_id=data.topic_id,
@@ -166,7 +171,13 @@ def create_proposed_sessions(
     """
     for _topic_id, week in items:
         if week is not None and not MIN_TEACHING_WEEK <= week <= MAX_TEACHING_WEEK:
-            raise AppError(422, "VALIDATION_ERROR", f"Teaching week must be between {MIN_TEACHING_WEEK} and {MAX_TEACHING_WEEK}.")
+            raise AppError(
+                422,
+                "VALIDATION_ERROR",
+                N_("Teaching week must be between {min} and {max}."),
+                min=MIN_TEACHING_WEEK,
+                max=MAX_TEACHING_WEEK,
+            )
     topics = [_schedulable_topic(db, topic_id) for topic_id, _week in items]
     already_scheduled = set(
         db.scalars(
@@ -198,12 +209,16 @@ def update_session(db: Session, session: SeminarSession, changes: dict) -> Semin
 
     new_status = changes.get("status", session.status)
     if new_status != session.status and new_status not in ALLOWED_TRANSITIONS[session.status]:
-        raise _invalid_state(f"A {session.status.value} session cannot become {new_status.value}.")
+        raise _invalid_state(
+            N_("A {current} session cannot become {new}."),
+            current=STATUS_WORD[session.status.value],
+            new=STATUS_WORD[new_status.value],
+        )
 
     replacing_topic = "topic_id" in changes and changes["topic_id"] != session.topic_id
     if replacing_topic:
         if session.status != SessionStatus.proposed:
-            raise _invalid_state("The topic can only be replaced while the session is proposed.")
+            raise _invalid_state(N_("The topic can only be replaced while the session is proposed."))
         _schedulable_topic(db, changes["topic_id"])
 
     week = changes.get("teaching_week", session.teaching_week)
@@ -244,14 +259,14 @@ def confirm_all_proposed(db: Session) -> tuple[list[SeminarSession], list[Semina
 def assign_presenter(db: Session, session: SeminarSession, user_id: int, role: PresenterRole) -> SessionPresenter:
     user = db.get(User, user_id)
     if user is None or not user.is_active:
-        raise AppError(404, "USER_NOT_FOUND", "User not found.")
+        raise AppError(404, "USER_NOT_FOUND", N_("User not found."))
     presenter = SessionPresenter(session_id=session.id, user_id=user.id, presenter_role=role)
     db.add(presenter)
     try:
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise AppError(409, "DUPLICATE_PRESENTER", "This user is already a presenter for the session.") from None
+        raise AppError(409, "DUPLICATE_PRESENTER", N_("This user is already a presenter for the session.")) from None
     return presenter
 
 
@@ -260,7 +275,7 @@ def remove_presenter(db: Session, session: SeminarSession, user_id: int) -> None
         select(SessionPresenter).where(SessionPresenter.session_id == session.id, SessionPresenter.user_id == user_id)
     )
     if presenter is None:
-        raise AppError(404, "PRESENTER_NOT_FOUND", "This user is not a presenter for the session.")
+        raise AppError(404, "PRESENTER_NOT_FOUND", N_("This user is not a presenter for the session."))
     db.delete(presenter)
     db.commit()
 
@@ -274,9 +289,9 @@ def record_attendance(
     """Create or update the user's expected attendance; only for confirmed sessions."""
     session = get_session(db, session_id)
     if session.status == SessionStatus.cancelled:
-        raise _invalid_state("This session is cancelled and no longer accepts attendance intentions.")
+        raise _invalid_state(N_("This session is cancelled and no longer accepts attendance intentions."))
     if session.status != SessionStatus.confirmed:
-        raise _invalid_state("Attendance can only be recorded for confirmed sessions.")
+        raise _invalid_state(N_("Attendance can only be recorded for confirmed sessions."))
     for _attempt in range(2):  # the retry covers a concurrent first insert (unique constraint)
         row = db.scalar(
             select(AttendanceIntent).where(
@@ -293,7 +308,7 @@ def record_attendance(
             return row
         except IntegrityError:
             db.rollback()
-    raise AppError(409, "CONFLICT", "Your attendance was changed at the same time; please try again.")
+    raise AppError(409, "CONFLICT", N_("Your attendance was changed at the same time; please try again."))
 
 
 def attendance_summary(db: Session, session_id: int) -> dict[str, int]:

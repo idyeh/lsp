@@ -125,3 +125,22 @@ def login(app):
 def anon(app):
     with TestClient(app) as client:
         yield client
+
+
+@pytest.fixture
+def browser(app):
+    """Factory for web clients: browser(user) is logged in through the real login form."""
+    from tests.helpers import Browser
+
+    created = []
+
+    def _browser(user=None, headers=None):
+        b = Browser(app, headers)
+        created.append(b)
+        if user:
+            assert b.login(user).headers["location"] == "/"
+        return b
+
+    yield _browser
+    for b in created:
+        b.client.close()

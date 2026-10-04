@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% block title %}Error {{ error_status }}{% endblock %}
+{% block title %}{{ _("Error") }} {{ error_status }}{% endblock %}
 {% block content %}
-<h1>{{ 'Page not found' if error_status == 404 else 'Something went wrong' }}</h1>
-<p>{{ message }}</p>
-<p><a href="/">Back to the start</a></p>
+<h1>{{ _("Page not found") if error_status == 404 else _("Something went wrong") }}</h1>
+<p>{{ _(message, **params) }}</p>
+<p><a href="/">{{ _("Back to the start") }}</a></p>
 {% endblock %}

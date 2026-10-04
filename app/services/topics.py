@@ -5,9 +5,10 @@ from sqlalchemy.orm import Session
 
 from app.enums import TopicStatus, TopicType
 from app.errors import AppError
-from app.models import Topic, User
+from app.models import Topic, TopicTranslation, User
 from app.schemas import TopicCreate
 from app.services import settings as settings_service
+from app.i18n import N_
 
 # Statuses students may see. Drafts and archived topics are organiser-only.
 STUDENT_VISIBLE = (TopicStatus.active, TopicStatus.closed)
@@ -16,7 +17,7 @@ SCHEDULABLE = (TopicStatus.active, TopicStatus.closed)
 
 
 def _not_found() -> AppError:
-    return AppError(404, "TOPIC_NOT_FOUND", "Topic not found.")
+    return AppError(404, "TOPIC_NOT_FOUND", N_("Topic not found."))
 
 
 def keywords_to_text(keywords: list[str]) -> str | None:
@@ -65,6 +66,29 @@ def get_topic(db: Session, topic_id: int, viewer: User) -> Topic:
     return topic
 
 
+def apply_translations(topic: Topic, translations: dict[str, dict | None]) -> None:
+    """Add, replace or (when the value is None) remove translations. Languages not listed are untouched."""
+    existing = topic.translation_map
+    for language, text in translations.items():
+        current = existing.get(language)
+        if text is None:
+            if current is not None:
+                topic.translations.remove(current)
+        elif current is None:
+            topic.translations.append(
+                TopicTranslation(
+                    language=language,
+                    title=text["title"],
+                    description=text["description"],
+                    keywords=keywords_to_text(text.get("keywords") or []),
+                )
+            )
+        else:
+            current.title = text["title"]
+            current.description = text["description"]
+            current.keywords = keywords_to_text(text.get("keywords") or [])
+
+
 def create_topic(db: Session, data: TopicCreate, actor: User, submitted_by: int | None = None) -> Topic:
     topic = Topic(
         title=data.title,
@@ -76,6 +100,7 @@ def create_topic(db: Session, data: TopicCreate, actor: User, submitted_by: int 
         submitted_by=submitted_by,
         created_by=actor.id,
     )
+    apply_translations(topic, {lang: t.model_dump() for lang, t in data.translations.items() if t is not None})
     db.add(topic)
     db.commit()
     return topic
@@ -91,6 +116,7 @@ def update_topic(db: Session, topic: Topic, changes: dict) -> Topic:
         changes["category"] = settings_service.validate_category(db, changes["category"])
     if "keywords" in changes:
         changes["keywords"] = keywords_to_text(changes["keywords"] or [])
+    apply_translations(topic, changes.pop("translations", None) or {})
     for field, value in changes.items():
         setattr(topic, field, value)
     db.commit()
