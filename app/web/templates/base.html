@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}{% endblock %} · Lab Seminar Planner</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="/">Lab Seminar Planner</a>
+    {% if user %}
+    <nav aria-label="Main">
+      <a href="/topics" {% if path.startswith('/topics') %}class="active"{% endif %}>Topics &amp; voting</a>
+      <a href="/results" {% if path == '/results' %}class="active"{% endif %}>Results</a>
+      <a href="/proposals" {% if path == '/proposals' %}class="active"{% endif %}>Propose a topic</a>
+      <a href="/plan" {% if path == '/plan' %}class="active"{% endif %}>Semester plan</a>
+    </nav>
+    <div class="who">
+      <span>{{ user.display_name }}{% if user.is_organiser %} <span class="badge">organiser</span>{% endif %}</span>
+      <form method="post" action="/logout" class="inline-form">{% include "_csrf.html" %}<button class="secondary" type="submit">Log out</button></form>
+    </div>
+    {% endif %}
+  </div>
+  {% if user and user.is_organiser %}
+  <div class="nav-organiser"><div class="wrap">
+    <strong>Organiser:</strong>
+    <a href="/organiser/topics">Topics</a>
+    <a href="/organiser/proposals">Proposals</a>
+    <a href="/organiser/planning">Planning &amp; sessions</a>
+    <a href="/organiser/settings">Settings &amp; voting</a>
+    <a href="/organiser/users">Users</a>
+  </div></div>
+  {% endif %}
+</header>
+<main class="wrap">
+  {% if user and settings %}
+  <div class="status-line">{{ settings.semester_name }} · Voting is <strong>{{ 'open' if settings.voting_open else 'closed' }}</strong></div>
+  {% endif %}
+  {% for level, message in flashes %}<div class="flash {{ level }}" role="status">{{ message }}</div>{% endfor %}
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

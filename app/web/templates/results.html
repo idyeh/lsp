@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Results{% endblock %}
+{% macro volunteer_names(topic_id) %}
+  {% for v in volunteers.get(topic_id, []) %}{{ v.display_name }}{% if v.year_group %} ({{ v.year_group }}){% endif %} – {{ labels.presentation[v.presentation_preference] }}{% if not loop.last %}<br>{% endif %}{% else %}<span class="muted">none</span>{% endfor %}
+{% endmacro %}
+{% macro status_badge(result) %}
+  {% if result.selection_status == 'not_selected' %}
+    {% if result.topic.topic_type.value == 'core' %}<span class="badge core">Core – to be scheduled</span>{% else %}<span class="badge">Not selected</span>{% endif %}
+  {% else %}
+    <span class="badge status-{{ result.selection_status }}">{{ labels.selection[result.selection_status] }}</span>
+  {% endif %}
+{% endmacro %}
+{% block content %}
+<h1>Results</h1>
+<p class="muted">Interest score = 3 × (very interested) + 2 × (interested) + 1 × (slightly interested). Only totals are shown; individual choices are private{% if user.is_organiser %} (organisers can see who volunteered to present){% endif %}.</p>
+
+<h2>Optional topics, by interest</h2>
+<div class="table-wrap"><table>
+  <thead><tr>
+    <th class="num">#</th><th>Topic</th><th class="num">Score</th><th class="num">3 / 2 / 1</th>
+    <th class="num">Lead</th><th class="num">Co-present</th><th class="num">Maybe</th><th>Status</th>{% if user.is_organiser %}<th>Volunteers</th>{% endif %}
+  </tr></thead>
+  <tbody>
+  {% for r in optional %}
+    <tr>
+      <td class="num">{{ loop.index }}</td>
+      <td><strong>{{ r.topic.title }}</strong><div class="muted">{{ r.topic.category|category_label }}</div></td>
+      <td class="num"><strong>{{ r.interest_score }}</strong></td>
+      <td class="num scoreline">{{ r.breakdown[3] }} / {{ r.breakdown[2] }} / {{ r.breakdown[1] }}</td>
+      <td class="num">{{ r.presenter_counts['lead'] }}</td>
+      <td class="num">{{ r.presenter_counts['co_present'] }}</td>
+      <td class="num">{{ r.presenter_counts['maybe'] }}</td>
+      <td>{{ status_badge(r) }}</td>
+      {% if user.is_organiser %}<td>{{ volunteer_names(r.topic.id) }}</td>{% endif %}
+    </tr>
+  {% else %}
+    <tr><td colspan="9" class="muted">No optional topics yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+
+<h2>Core topics</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Topic</th><th class="num">Lead</th><th class="num">Co-present</th><th class="num">Maybe</th><th>Status</th>{% if user.is_organiser %}<th>Volunteers</th>{% endif %}</tr></thead>
+  <tbody>
+  {% for r in core %}
+    <tr>
+      <td><strong>{{ r.topic.title }}</strong><div class="muted">{{ r.topic.category|category_label }}</div></td>
+      <td class="num">{{ r.presenter_counts['lead'] }}</td>
+      <td class="num">{{ r.presenter_counts['co_present'] }}</td>
+      <td class="num">{{ r.presenter_counts['maybe'] }}</td>
+      <td>{{ status_badge(r) }}</td>
+      {% if user.is_organiser %}<td>{{ volunteer_names(r.topic.id) }}</td>{% endif %}
+    </tr>
+  {% else %}
+    <tr><td colspan="6" class="muted">No core topics yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% endblock %}

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Edit topic' if topic else 'New topic' }}{% endblock %}
+{% block content %}
+<h1>{{ 'Edit topic' if topic else 'New topic' }}</h1>
+<form method="post" action="{{ '/organiser/topics/%d' % topic.id if topic else '/organiser/topics/new' }}" class="card">
+  {% include "_csrf.html" %}
+  <div class="form-grid">
+    <label class="wide">Title <input type="text" name="title" maxlength="200" value="{{ topic.title if topic else '' }}" required></label>
+    <label class="wide">Short description <textarea name="description" maxlength="5000" required>{{ topic.description if topic else '' }}</textarea></label>
+    <label>Category
+      <select name="category" required>
+        {% for c in categories %}<option value="{{ c }}" {% if topic and topic.category == c %}selected{% endif %}>{{ c|category_label }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Type
+      <select name="topic_type">
+        {% for v in ['optional', 'core'] %}<option value="{{ v }}" {% if topic and topic.topic_type.value == v %}selected{% endif %}>{{ v|titlecase }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Status
+      <select name="status">
+        {% for v in ['active', 'draft', 'closed', 'archived'] %}<option value="{{ v }}" {% if (topic.status.value if topic else 'active') == v %}selected{% endif %}>{{ v|titlecase }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Keywords (comma-separated) <input type="text" name="keywords" value="{{ topic.keyword_list|join(', ') if topic else '' }}"></label>
+  </div>
+  <div class="actions"><button type="submit">Save topic</button><a href="/organiser/topics">Cancel</a></div>
+</form>
+{% endblock %}

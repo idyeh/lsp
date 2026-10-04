@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Users{% endblock %}
+{% block content %}
+<h1>Users</h1>
+<form method="post" action="/organiser/users" class="card">
+  {% include "_csrf.html" %}
+  <h2 style="margin-top:0">Create an account</h2>
+  <div class="form-grid">
+    <label>Username <input type="text" name="username" maxlength="64" autocomplete="off" required></label>
+    <label>Display name <input type="text" name="display_name" maxlength="100" required></label>
+    <label>Initial password (at least 8 characters) <input type="password" name="password" minlength="8" maxlength="256" autocomplete="new-password" required></label>
+    <label>Role <select name="role"><option value="student">Student</option><option value="organiser">Organiser</option></select></label>
+    <label>Year group (optional, e.g. UG2) <input type="text" name="year_group" maxlength="20"></label>
+  </div>
+  <div class="actions"><button type="submit">Create account</button></div>
+</form>
+
+<h2>Accounts</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Year</th><th>Status</th><th>Actions</th></tr></thead>
+  <tbody>
+  {% for a in accounts %}
+    <tr>
+      <td>{{ a.display_name }}</td>
+      <td>{{ a.username }}</td>
+      <td>{{ a.role.value|titlecase }}</td>
+      <td>{{ a.year_group or '' }}</td>
+      <td>{% if a.is_active %}<span class="badge active">Active</span>{% else %}<span class="badge archived">Deactivated</span>{% endif %}</td>
+      <td>
+        <form method="post" action="/organiser/users/{{ a.id }}/active" class="inline-form">
+          {% include "_csrf.html" %}<input type="hidden" name="active" value="{{ '0' if a.is_active else '1' }}">
+          <button class="link" type="submit">{{ 'Deactivate' if a.is_active else 'Reactivate' }}</button>
+        </form>
+        ·
+        <form method="post" action="/organiser/users/{{ a.id }}/role" class="inline-form">
+          {% include "_csrf.html" %}<input type="hidden" name="role" value="{{ 'student' if a.role.value == 'organiser' else 'organiser' }}">
+          <button class="link" type="submit">Make {{ 'student' if a.role.value == 'organiser' else 'organiser' }}</button>
+        </form>
+        <details>
+          <summary>Set a new password</summary>
+          <form method="post" action="/organiser/users/{{ a.id }}/password" class="inline-form">
+            {% include "_csrf.html" %}
+            <input type="password" name="password" minlength="8" maxlength="256" autocomplete="new-password" aria-label="New password for {{ a.display_name }}" required>
+            <button class="secondary" type="submit">Change</button>
+          </form>
+        </details>
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% endblock %}

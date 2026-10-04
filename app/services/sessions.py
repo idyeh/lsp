@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session, joinedload, selectinload
 from app.enums import AttendanceIntention, PresenterRole, SessionStatus
 from app.errors import AppError
 from app.models import AttendanceIntent, SeminarSession, SessionPresenter, Topic, User
-from app.schemas import SessionCreate
+from app.schemas import MAX_TEACHING_WEEK, MIN_TEACHING_WEEK, SessionCreate
 from app.services import topics as topic_service
 
 ALLOWED_TRANSITIONS: dict[SessionStatus, set[SessionStatus]] = {
@@ -164,6 +164,9 @@ def create_proposed_sessions(
     candidate plan twice cannot create duplicates. Nothing is created if any topic is
     not schedulable. Returns (created sessions, skipped topics).
     """
+    for _topic_id, week in items:
+        if week is not None and not MIN_TEACHING_WEEK <= week <= MAX_TEACHING_WEEK:
+            raise AppError(422, "VALIDATION_ERROR", f"Teaching week must be between {MIN_TEACHING_WEEK} and {MAX_TEACHING_WEEK}.")
     topics = [_schedulable_topic(db, topic_id) for topic_id, _week in items]
     already_scheduled = set(
         db.scalars(

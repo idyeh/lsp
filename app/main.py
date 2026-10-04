@@ -1,6 +1,7 @@
 """Application factory and error handling."""
 
 import logging
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -12,8 +13,9 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.api import api_router
 from app.config import Settings, load_settings
-from app.database import make_engine, make_sessionmaker
+from app.database import init_db, make_engine, make_sessionmaker
 from app.errors import AppError
+from app.web import web_router
 
 logger = logging.getLogger(__name__)
 
@@ -66,9 +68,22 @@ def register_error_handlers(app: FastAPI) -> None:
         return _respond(request, 500, "INTERNAL_ERROR", "Something went wrong on the server.")
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db(app.state.engine)  # creates missing tables only; never alters or drops existing ones
+    logging.getLogger("uvicorn.error").info("Using database %s", app.state.engine.url.render_as_string(hide_password=True))
+    yield
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     settings = settings or load_settings()
-    app = FastAPI(title="Lab Seminar Planner", docs_url="/api/docs", redoc_url=None, openapi_url="/api/openapi.json")
+    app = FastAPI(
+        title="Lab Seminar Planner",
+        docs_url="/api/docs",
+        redoc_url=None,
+        openapi_url="/api/openapi.json",
+        lifespan=lifespan,
+    )
     app.state.settings = settings
     app.state.engine = make_engine(settings.database_url)
     app.state.sessionmaker = make_sessionmaker(app.state.engine)
@@ -82,5 +97,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     )
     register_error_handlers(app)
     app.include_router(api_router)
+    app.include_router(web_router)
     app.mount("/static", StaticFiles(directory=WEB_DIR / "static"), name="static")
     return app

@@ -16,6 +16,8 @@ from app.enums import (
 )
 
 MAX_KEYWORDS = 20
+MIN_TEACHING_WEEK = 1
+MAX_TEACHING_WEEK = 60
 MAX_KEYWORD_LENGTH = 50
 
 
@@ -50,7 +52,7 @@ Description = _text(5000)
 LongNote = _text(2000)
 CategoryText = _text(64)
 SessionNotes = Annotated[str, StringConstraints(strip_whitespace=True, max_length=2000)]
-TeachingWeek = Annotated[int, Field(ge=1, le=60)]
+TeachingWeek = Annotated[int, Field(ge=MIN_TEACHING_WEEK, le=MAX_TEACHING_WEEK)]
 
 
 class ORMModel(BaseModel):

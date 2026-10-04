@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Semester plan{% endblock %}
+{% block content %}
+<h1>Semester plan</h1>
+<p class="muted">
+  <span class="badge status-confirmed">Confirmed</span> sessions are fixed.
+  <span class="badge status-proposed">Provisional</span> sessions (shown in italics) may still change.
+  Your expected attendance is only used for planning; it is not an attendance record.
+</p>
+<div class="table-wrap"><table class="stack">
+  <thead><tr><th>When</th><th>Topic</th><th>Presenters</th><th>Status</th><th>Expected attendance</th></tr></thead>
+  <tbody>
+  {% for view in views %}
+    {% set s = view.session %}
+    <tr class="{{ s.status.value }}">
+      <td data-label="When">
+        {% if s.teaching_week %}Week {{ s.teaching_week }}{% endif %}
+        {% if s.session_date %}<div>{{ s.session_date.strftime('%a %d %b %Y') }}{% if s.start_time %}, {{ s.start_time.strftime('%H:%M') }}{% endif %}</div>{% endif %}
+        {% if not s.teaching_week and not s.session_date %}<span class="muted">To be scheduled</span>{% endif %}
+      </td>
+      <td data-label="Topic">
+        <strong>{{ s.topic.title }}</strong>
+        <div class="muted">{{ s.topic.category|category_label }} · {{ s.topic.topic_type.value }}</div>
+        {% if s.notes %}<div class="muted">{{ s.notes }}</div>{% endif %}
+      </td>
+      <td data-label="Presenters">
+        {% for p in s.presenters %}{{ p.user.display_name }} <span class="muted">({{ labels.presenter_role[p.presenter_role] }})</span>{% if not loop.last %}<br>{% endif %}{% else %}<span class="muted">To be confirmed</span>{% endfor %}
+      </td>
+      <td data-label="Status"><span class="badge status-{{ s.status.value }}">{{ labels.session_status[s.status] }}</span></td>
+      <td data-label="Expected attendance">
+        {% if s.status.value == 'confirmed' %}
+          <div class="scoreline muted">
+            <span class="nobr">{{ view.attendance['attend'] }} attend</span> ·
+            <span class="nobr">{{ view.attendance['probably_attend'] }} probably</span> ·
+            <span class="nobr">{{ view.attendance['probably_absent'] }} probably not</span> ·
+            <span class="nobr">{{ view.attendance['not_sure'] }} not sure</span>
+          </div>
+          <form method="post" action="/sessions/{{ s.id }}/attendance" class="inline-form" style="margin-top:.3rem">
+            {% include "_csrf.html" %}
+            <select name="intention" aria-label="Your expected attendance for {{ s.topic.title }}">
+              {% if not view.my_intention %}<option value="" selected disabled>Choose…</option>{% endif %}
+              {% for value in ['attend', 'probably_attend', 'probably_absent', 'not_sure'] %}
+              <option value="{{ value }}" {% if view.my_intention and view.my_intention.value == value %}selected{% endif %}>{{ labels.attendance[value] }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit">Save</button>
+          </form>
+        {% elif s.status.value == 'proposed' %}
+          <span class="muted">Opens when the session is confirmed</span>
+        {% else %}
+          <span class="muted">–</span>
+        {% endif %}
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5" class="muted">The plan has not been published yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% endblock %}

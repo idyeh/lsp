@@ -9,3 +9,6 @@ data/
 # Local secrets / environment
 .env
 .DS_Store
+
+# Local Claude Code preview configuration
+.claude/

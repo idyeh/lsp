@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Review proposals{% endblock %}
+{% block content %}
+<h1>Review proposals</h1>
+<p class="muted">Approving a proposal creates an active topic in the voting pool. The proposal itself is kept for the record.</p>
+
+<h2>Pending ({{ pending|length }})</h2>
+{% for p in pending %}
+<article class="card">
+  <div class="card-head"><h3>{{ p.title }}</h3><span class="muted">from {{ p.submitter.display_name }}, {{ p.created_at.strftime('%d %b %Y') }}</span></div>
+  <details>
+    <summary>Edit the proposal</summary>
+    <form method="post" action="/organiser/proposals/{{ p.id }}/edit">
+      {% include "_csrf.html" %}
+      <div class="form-grid">
+        <label class="wide">Title <input type="text" name="title" value="{{ p.title }}" maxlength="200" required></label>
+        <label class="wide">Short description <textarea name="description" maxlength="5000" required>{{ p.description }}</textarea></label>
+        <label>Category
+          <select name="category"><option value="">–</option>{% for c in categories %}<option value="{{ c }}" {% if p.category == c %}selected{% endif %}>{{ c|category_label }}</option>{% endfor %}</select>
+        </label>
+        <label>Keywords <input type="text" name="keywords" value="{{ p.keyword_list|join(', ') }}"></label>
+        <label class="wide">Rationale <textarea name="rationale" maxlength="2000">{{ p.rationale or '' }}</textarea></label>
+      </div>
+      <div class="actions"><button class="secondary" type="submit">Save edits</button></div>
+    </form>
+  </details>
+  <p>{{ p.description }}</p>
+  {% if p.keyword_list %}<p>{% for k in p.keyword_list %}<span class="chip">{{ k }}</span>{% endfor %}</p>{% endif %}
+  {% if p.rationale %}<p class="muted"><strong>Why:</strong> {{ p.rationale }}</p>{% endif %}
+  <div class="actions">
+    <form method="post" action="/organiser/proposals/{{ p.id }}/approve" class="inline-form">
+      {% include "_csrf.html" %}
+      <label>Type <select name="topic_type"><option value="optional">Optional</option><option value="core">Core</option></select></label>
+      <label>Category
+        <select name="category">{% for c in categories %}<option value="{{ c }}" {% if p.category == c %}selected{% endif %}>{{ c|category_label }}</option>{% endfor %}</select>
+      </label>
+      <button type="submit">Approve</button>
+    </form>
+    <form method="post" action="/organiser/proposals/{{ p.id }}/reject" class="inline-form">
+      {% include "_csrf.html" %}
+      <label>Note to the student (optional) <input type="text" name="review_note" maxlength="2000"></label>
+      <button class="danger" type="submit">Reject</button>
+    </form>
+    <form method="post" action="/organiser/proposals/{{ p.id }}/archive" class="inline-form">
+      {% include "_csrf.html" %}<button class="secondary" type="submit">Archive</button>
+    </form>
+  </div>
+</article>
+{% else %}
+<p class="muted">No proposals are waiting for review.</p>
+{% endfor %}
+
+<h2>Decided and archived</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Title</th><th>From</th><th>Status</th><th>Note</th><th></th></tr></thead>
+  <tbody>
+  {% for p in decided %}
+    <tr>
+      <td>{{ p.title }}</td>
+      <td>{{ p.submitter.display_name }}</td>
+      <td><span class="badge {{ p.status.value }}">{{ p.status.value|titlecase }}</span></td>
+      <td>{{ p.review_note or '' }}</td>
+      <td>
+        {% if p.status.value != 'archived' %}
+        <form method="post" action="/organiser/proposals/{{ p.id }}/archive" class="inline-form">{% include "_csrf.html" %}<button class="link" type="submit">Archive</button></form>
+        {% endif %}
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5" class="muted">Nothing here yet.</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% endblock %}

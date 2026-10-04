@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Manage topics{% endblock %}
+{% block content %}
+<h1>Manage topics</h1>
+<div class="actions"><a class="button" href="/organiser/topics/new">New topic</a></div>
+<p class="muted">Drafts are hidden from students. Closed topics stay visible but no longer accept preferences. Archived topics are hidden and cannot be scheduled.</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>Title</th><th>Type</th><th>Category</th><th>Status</th><th></th></tr></thead>
+  <tbody>
+  {% for t in topics %}
+    <tr>
+      <td><strong>{{ t.title }}</strong></td>
+      <td><span class="badge {{ t.topic_type.value }}">{{ t.topic_type.value|titlecase }}</span></td>
+      <td>{{ t.category|category_label }}</td>
+      <td><span class="badge {{ t.status.value }}">{{ t.status.value|titlecase }}</span></td>
+      <td>
+        <a href="/organiser/topics/{{ t.id }}">Edit</a>
+        {% if t.status.value != 'archived' %}
+        <form method="post" action="/organiser/topics/{{ t.id }}/archive" class="inline-form">{% include "_csrf.html" %}<button class="link" type="submit">Archive</button></form>
+        {% endif %}
+      </td>
+    </tr>
+  {% else %}
+    <tr><td colspan="5" class="muted">No topics yet. Create one, or approve a student proposal.</td></tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% endblock %}

@@ -52,5 +52,6 @@ def require_organiser(user: Annotated[User, Depends(current_user)]) -> User:
 
 
 Db = Annotated[Session, Depends(get_db)]
+OptionalUser = Annotated[User | None, Depends(optional_user)]
 CurrentUser = Annotated[User, Depends(current_user)]
 Organiser = Annotated[User, Depends(require_organiser)]

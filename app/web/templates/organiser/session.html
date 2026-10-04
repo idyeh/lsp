@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+{% block title %}Edit session{% endblock %}
+{% block content %}
+{% set s = view.session %}
+<p><a href="/organiser/planning">← Planning &amp; sessions</a></p>
+<h1>{{ s.topic.title }} <span class="badge status-{{ s.status.value }}">{{ labels.session_status[s.status] }}</span></h1>
+
+<form method="post" action="/organiser/sessions/{{ s.id }}/update" class="card">
+  {% include "_csrf.html" %}
+  <div class="form-grid">
+    <label>Teaching week <input type="number" name="teaching_week" min="1" max="60" value="{{ s.teaching_week or '' }}"></label>
+    <label>Date <input type="date" name="session_date" value="{{ s.session_date.isoformat() if s.session_date else '' }}"></label>
+    <label>Start time <input type="time" name="start_time" value="{{ s.start_time.strftime('%H:%M') if s.start_time else '' }}"></label>
+    <label>Status
+      <select name="status">{% for st in statuses %}<option value="{{ st.value }}" {% if st == s.status %}selected{% endif %}>{{ labels.session_status[st] }}</option>{% endfor %}</select>
+    </label>
+    <label class="wide">Notes <input type="text" name="notes" maxlength="2000" value="{{ s.notes or '' }}"></label>
+  </div>
+  <p class="muted">A session needs a week or a date before it can be confirmed. Students can record expected attendance only while it is confirmed.</p>
+  <div class="actions"><button type="submit">Save session</button></div>
+</form>
+
+{% if s.status.value == 'proposed' %}
+<form method="post" action="/organiser/sessions/{{ s.id }}/topic" class="card">
+  {% include "_csrf.html" %}
+  <h2 style="margin-top:0">Replace the topic</h2>
+  <p class="muted">Swap in a different topic while the session is still provisional. Presenters assigned for the current topic are cleared.</p>
+  <div class="actions">
+    <select name="topic_id" aria-label="New topic" style="width:auto">
+      {% for t in schedulable %}<option value="{{ t.id }}" {% if t.id == s.topic_id %}selected{% endif %}>{{ t.title }}</option>{% endfor %}
+    </select>
+    <button class="secondary" type="submit">Replace topic</button>
+  </div>
+</form>
+{% endif %}
+
+<h2>Presenters</h2>
+<div class="table-wrap"><table>
+  <thead><tr><th>Name</th><th>Role</th><th></th></tr></thead>
+  <tbody>
+  {% for p in s.presenters %}
+    <tr>
+      <td>{{ p.user.display_name }}</td>
+      <td>{{ labels.presenter_role[p.presenter_role] }}</td>
+      <td><form method="post" action="/organiser/sessions/{{ s.id }}/presenters/{{ p.user_id }}/remove" class="inline-form">{% include "_csrf.html" %}<button class="link" type="submit">Remove</button></form></td>
+    </tr>
+  {% else %}<tr><td colspan="3" class="muted">No presenters assigned yet.</td></tr>{% endfor %}
+  </tbody>
+</table></div>
+
+<form method="post" action="/organiser/sessions/{{ s.id }}/presenters" class="card">
+  {% include "_csrf.html" %}
+  <div class="form-grid">
+    <label>Person
+      <select name="user_id" required>
+        {% if volunteers %}<optgroup label="Volunteered for this topic">
+          {% for v in volunteers %}<option value="{{ v.user_id }}">{{ v.display_name }}{% if v.year_group %} ({{ v.year_group }}){% endif %} – {{ labels.presentation[v.presentation_preference] }}</option>{% endfor %}
+        </optgroup>{% endif %}
+        <optgroup label="Everyone else">
+          {% for u in other_users %}<option value="{{ u.id }}">{{ u.display_name }}{% if u.year_group %} ({{ u.year_group }}){% endif %}</option>{% endfor %}
+        </optgroup>
+      </select>
+    </label>
+    <label>Role
+      <select name="presenter_role"><option value="lead">Lead</option><option value="co_presenter">Co-presenter</option></select>
+    </label>
+  </div>
+  <div class="actions"><button type="submit">Assign presenter</button></div>
+</form>
+
+<h2>Expected attendance</h2>
+<p class="scoreline">{{ view.attendance['attend'] }} attend · {{ view.attendance['probably_attend'] }} probably attend · {{ view.attendance['probably_absent'] }} probably absent · {{ view.attendance['not_sure'] }} not sure</p>
+{% if attendance %}
+<div class="table-wrap"><table>
+  <thead><tr><th>Name</th><th>Intention</th></tr></thead>
+  <tbody>{% for a in attendance %}<tr><td>{{ a.user.display_name }}</td><td>{{ labels.attendance[a.intention] }}</td></tr>{% endfor %}</tbody>
+</table></div>
+{% else %}<p class="muted">Nobody has recorded an intention yet.</p>{% endif %}
+{% endblock %}
