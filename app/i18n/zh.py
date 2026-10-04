@@ -117,6 +117,9 @@ ZH: dict[str, str] = {
     "Voting is open": "投票已开放",
     "Voting is closed": "投票已关闭",
     # --- login and account --------------------------------------------------
+    "Show": "显示",
+    "Hide": "隐藏",
+    "Show password": "显示密码",
     "Username": "用户名",
     "Password": "密码",
     "Accounts are created by the organisers. Ask one of them if you cannot log in.": "账号由组织者创建。如果无法登录，请联系组织者。",

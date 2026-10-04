@@ -90,3 +90,11 @@ summary { cursor: pointer; font-weight: 600; }
   table.stack td { border: 0; padding: .25rem .65rem; }
   table.stack td[data-label]::before { content: attr(data-label); display: block; font-size: .72rem; text-transform: uppercase; letter-spacing: .03em; color: var(--muted); font-style: normal; }
 }
+
+/* Show/hide toggle drawn inside password fields (added by app.js). */
+.password-field { position: relative; display: block; }
+.inline-form .password-field { display: inline-block; }
+.password-field input[type=password], .password-field input[type=text] { padding-right: 4.2rem; }
+.password-toggle { position: absolute; top: 50%; right: .35rem; transform: translateY(-50%); margin-top: .1rem; padding: .15rem .55rem; font-size: .8rem; background: transparent; color: var(--accent); border-color: transparent; }
+.password-toggle:hover { border-color: var(--accent); }
+.inline-form .password-toggle { margin-top: 0; }

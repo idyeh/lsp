@@ -6,6 +6,8 @@
   <title>{% block title %}{% endblock %} · {{ _("Lab Seminar Planner") }}</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="/static/style.css?v={{ asset_version }}">
+  <script src="/static/app.js?v={{ asset_version }}" defer
+          data-show-label="{{ _('Show') }}" data-hide-label="{{ _('Hide') }}" data-aria-label="{{ _('Show password') }}"></script>
 </head>
 <body>
 <header class="site-header">

@@ -78,8 +78,9 @@ LABELS = {
     },
 }
 templates.env.globals["labels"] = LABELS
-# Changes whenever the stylesheet does, so browsers never keep showing an old copy after an update.
-templates.env.globals["asset_version"] = int((Path(__file__).parent / "static" / "style.css").stat().st_mtime)
+# Changes whenever a static file does, so browsers never keep showing an old copy after an update.
+STATIC_DIR = Path(__file__).parent / "static"
+templates.env.globals["asset_version"] = int(max(f.stat().st_mtime for f in STATIC_DIR.iterdir()))
 
 
 # --- language ---------------------------------------------------------------------
