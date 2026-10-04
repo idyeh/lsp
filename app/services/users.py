@@ -6,9 +6,9 @@ from sqlalchemy.orm import Session
 
 from app.enums import Role
 from app.errors import AppError
+from app.i18n import N_
 from app.models import User
 from app.security import hash_password, verify_password
-from app.i18n import N_
 
 MIN_PASSWORD_LENGTH = 8
 MAX_PASSWORD_LENGTH = 256
@@ -48,14 +48,14 @@ def list_users(db: Session) -> list[User]:
     return list(db.scalars(select(User).order_by(User.display_name, User.id)))
 
 
-def create_user(
-    db: Session,
+def build_user(
     username: str,
     display_name: str,
     password: str,
     role: Role = Role.student,
     year_group: str | None = None,
 ) -> User:
+    """Validate the details and return a new User (not yet added to a session)."""
     username = normalise_username(username)
     display_name = display_name.strip()
     if not username or len(username) > 64 or any(c.isspace() for c in username):
@@ -66,19 +66,30 @@ def create_user(
     if year_group and len(year_group) > 20:
         raise AppError(422, "VALIDATION_ERROR", N_("Year group must be at most 20 characters."))
     _check_password(password)
-    user = User(
+    return User(
         username=username,
         display_name=display_name,
         password_hash=hash_password(password),
         role=Role(role),
         year_group=year_group,
     )
+
+
+def create_user(
+    db: Session,
+    username: str,
+    display_name: str,
+    password: str,
+    role: Role = Role.student,
+    year_group: str | None = None,
+) -> User:
+    user = build_user(username, display_name, password, role, year_group)
     db.add(user)
     try:
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise AppError(409, "DUPLICATE_USER", N_("Username '{username}' is already taken."), username=username) from None
+        raise AppError(409, "DUPLICATE_USER", N_("Username '{username}' is already taken."), username=user.username) from None
     return user
 
 

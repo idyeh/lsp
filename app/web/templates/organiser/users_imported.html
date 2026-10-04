@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}{{ _("Accounts created") }}{% endblock %}
+{% block content %}
+<h1>{{ _("Accounts created") }}: {{ accounts|length }}</h1>
+<p class="notice warn">{{ _("Passwords are shown only on this page. Give each person their password privately and ask them to change it under Account.") }}</p>
+<div class="table-wrap"><table>
+  <thead><tr><th>{{ _("Username") }}</th><th>{{ _("Name") }}</th><th>{{ _("Role") }}</th><th>{{ _("Year") }}</th><th>{{ _("Password") }}</th></tr></thead>
+  <tbody>
+  {% for a in accounts %}
+    <tr>
+      <td>{{ a.username }}</td>
+      <td>{{ a.display_name }}</td>
+      <td>{{ _(labels.role[a.role.value]) }}</td>
+      <td>{{ a.year_group or '' }}</td>
+      <td>{% if a.generated %}<code class="password">{{ a.password }}</code>{% else %}<span class="muted">{{ _("from your file") }}</span>{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+<div class="actions">
+  <a class="button" download="new-accounts.csv" href="data:text/csv;charset=utf-8,{{ credentials_csv|urlencode }}">{{ _("Download as CSV") }}</a>
+  <a href="/organiser/users">{{ _("Back to users") }}</a>
+</div>
+{% endblock %}

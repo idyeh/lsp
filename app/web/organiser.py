@@ -1,6 +1,7 @@
 """Organiser pages (SRS 4.11). Each page is a thin form over the same services the API uses."""
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Request, Response
+from starlette.datastructures import UploadFile
 
 from app.deps import Db, Organiser, start_session
 from app.enums import PresenterRole, ProposalStatus, Role, SessionStatus, TopicStatus
@@ -17,12 +18,12 @@ from app.schemas import (
     TopicUpdate,
     parse_keywords,
 )
-from app.services import planning, proposals, sessions, topics, users
+from app.services import planning, proposals, sessions, topics, user_import, users
 from app.services import settings as settings_service
 from app.services.results import volunteers_by_topic
 from app.services.sessions import ALLOWED_TRANSITIONS
 from app.web.common import Form, action, blank_to_none, flash, form_int, pick_language, redirect, render, text
-from app.i18n import N_
+from app.i18n import N_, translate
 
 router = APIRouter(prefix="/organiser")
 
@@ -243,6 +244,50 @@ def save_settings(request: Request, db: Db, organiser: Organiser, form: Form):
 @router.get("/users")
 def user_list(request: Request, db: Db, organiser: Organiser):
     return render(request, db, "organiser/users.html", organiser, accounts=users.list_users(db))
+
+
+@router.get("/users/template.csv")
+def user_template(organiser: Organiser):
+    return Response(
+        user_import.template_csv(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="accounts-template.csv"'},
+    )
+
+
+def _describe_problem(language: str, problem: user_import.Problem) -> str:
+    text_ = translate(language, problem.template, **problem.params)
+    return text_ if problem.row is None else translate(language, N_("Row {row}: {problem}"), row=problem.row, problem=text_)
+
+
+@router.post("/users/import")
+def import_users(request: Request, db: Db, organiser: Organiser, form: Form):
+    upload = form.get("file")
+    try:
+        if not isinstance(upload, UploadFile) or not upload.filename:
+            raise user_import.UserImportError([user_import.Problem(None, N_("Choose a CSV file to upload."))])
+        accounts = user_import.import_users(db, upload.file.read(user_import.MAX_BYTES + 1))
+    except user_import.UserImportError as exc:
+        language = pick_language(request)
+        return render(
+            request,
+            db,
+            "organiser/users.html",
+            organiser,
+            422,
+            accounts=users.list_users(db),
+            import_errors=[_describe_problem(language, p) for p in exc.problems],
+        )
+    response = render(
+        request,
+        db,
+        "organiser/users_imported.html",
+        organiser,
+        accounts=accounts,
+        credentials_csv=user_import.credentials_csv(accounts),
+    )
+    response.headers["Cache-Control"] = "no-store"  # the page shows generated passwords
+    return response
 
 
 @router.post("/users")

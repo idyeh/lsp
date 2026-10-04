@@ -30,10 +30,10 @@ class Browser:
     def get(self, url, **kw):
         return self.client.get(url, **kw)
 
-    def post(self, url, data=None, page=None, **kw):
+    def post(self, url, data=None, page=None, files=None, **kw):
         data = dict(data or {})
         data.setdefault("csrf_token", self.token((page or "/topics") if self.logged_in else "/login"))
-        response = self.client.post(url, data=data, **kw)
+        response = self.client.post(url, data=data, files=files, **kw)
         if url == "/logout":
             self.logged_in = False
         return response

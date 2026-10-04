@@ -98,3 +98,8 @@ summary { cursor: pointer; font-weight: 600; }
 .password-toggle { position: absolute; top: 50%; right: .35rem; transform: translateY(-50%); margin-top: .1rem; padding: .15rem .55rem; font-size: .8rem; background: transparent; color: var(--accent); border-color: transparent; }
 .password-toggle:hover { border-color: var(--accent); }
 .inline-form .password-toggle { margin-top: 0; }
+
+ul.compact { margin: .3rem 0; padding-left: 1.2rem; }
+pre.sample { background: var(--bg); border: 1px solid var(--border); border-radius: 6px; padding: .5rem .7rem; overflow-x: auto; font-size: .85rem; }
+code.password { font-size: 1.05rem; letter-spacing: .03em; user-select: all; }
+form.upload { align-items: center; gap: .8rem; }

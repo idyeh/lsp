@@ -15,6 +15,33 @@
   <div class="actions"><button type="submit">{{ _("Create account") }}</button></div>
 </form>
 
+<section class="card">
+  <h2 style="margin-top:0">{{ _("Import accounts from a file") }}</h2>
+  <p>{{ _("Fill in the template in a spreadsheet, save it as CSV, and upload it here. The columns are:") }}</p>
+  <ul class="compact">
+    <li><code>username</code>, <code>display_name</code> – {{ _("required") }}</li>
+    <li><code>role</code> – {{ _("student (the default) or organiser") }}</li>
+    <li><code>year_group</code> – {{ _("optional, e.g. UG2") }}</li>
+    <li><code>password</code> – {{ _("optional; leave it empty and a password is generated for you") }}</li>
+  </ul>
+  <pre class="sample">username,display_name,role,year_group,password
+alice,Alice Wang,student,UG2,
+bob,Bob Li,organiser,PG1,</pre>
+  <p class="muted">{{ _("Either every account is created or none is: if anything in the file is wrong you will see all the problems and nothing is imported.") }}</p>
+  {% if import_errors %}
+  <div class="flash error" role="alert">
+    <strong>{{ _("Nothing was imported. Fix these problems and upload the file again:") }}</strong>
+    <ul class="compact">{% for message in import_errors %}<li>{{ message }}</li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+  <form method="post" action="/organiser/users/import" enctype="multipart/form-data" class="inline-form upload">
+    {% include "_csrf.html" %}
+    <input type="file" name="file" accept=".csv,text/csv" aria-label="{{ _('CSV file') }}" required>
+    <button type="submit">{{ _("Import") }}</button>
+    <a href="/organiser/users/template.csv" download>{{ _("Download the template") }}</a>
+  </form>
+</section>
+
 <h2>{{ _("Accounts") }}</h2>
 <div class="table-wrap"><table>
   <thead><tr><th>{{ _("Name") }}</th><th>{{ _("Username") }}</th><th>{{ _("Role") }}</th><th>{{ _("Year") }}</th><th>{{ _("Status") }}</th><th>{{ _("Actions") }}</th></tr></thead>

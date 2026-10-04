@@ -97,9 +97,32 @@ All settings are environment variables.
 - **Backups.** Everything lives in one SQLite file. Take a consistent copy while the app is running with `sqlite3 data/seminar.db ".backup 'backup.db'"`.
 - **Workers.** One uvicorn process is plenty for a lab group. Sessions are signed cookies, so more workers also work as long as they share `LSP_SECRET_KEY`.
 
+## Importing accounts in bulk
+
+**Organiser → Users → Import accounts from a file** creates many accounts from a CSV file. Download the template there (or use `accounts-template.csv` from `/organiser/users/template.csv`), fill it in with a spreadsheet, save it as CSV and upload it.
+
+| Column | Required | Meaning |
+|---|---|---|
+| `username` | yes | Login name, stored in lower case, 1-64 characters without spaces. |
+| `display_name` | yes | Name shown in the interface. |
+| `role` | no | `student` (the default) or `organiser`. |
+| `year_group` | no | For example `UG2`. |
+| `password` | no | Leave it empty and a password is generated. |
+
+```csv
+username,display_name,role,year_group,password
+alice,Alice Wang,student,UG2,
+bob,Bob Li,organiser,PG1,
+```
+
+- **All or nothing.** If anything in the file is wrong (a bad username, a password under 8 characters, a username that already exists or is repeated, an unknown role, a row with more values than columns...) no account is created and every problem is listed with its row number. Row 1 is the header, so row numbers match your spreadsheet.
+- **Passwords.** Generated passwords (10 characters, without look-alike letters) are shown **once** on the result page, which the browser is told not to cache, and can be downloaded as a CSV. Passwords you typed into the file are never shown again. Ask people to change theirs under **Account**, and delete the roster file if it contains passwords.
+- **Encodings and separators.** UTF-8 (with or without a byte-order mark) and GBK/GB18030, which Excel on Chinese Windows uses for "CSV", are both accepted, as are files separated by semicolons or tabs. A value containing a comma must be in quotes.
+- **Limits.** At most 200 accounts and 256 KB per file; import larger rosters in parts.
+
 ## A typical semester
 
-1. **Users** – the organiser creates an account for each student (**Organiser → Users**) and hands over the initial password privately.
+1. **Users** – the organiser creates an account for each student (**Organiser → Users**), one at a time or by [importing a CSV roster](#importing-accounts-in-bulk), and hands over the initial passwords privately. Everyone can change their own password under **Account**.
 2. **Settings** – set the semester name, the target numbers (default 8 sessions: 4 core + 4 optional) and, if needed, the topic categories.
 3. **Topics** – create the topic pool (**Organiser → Topics**), or import it with `import-topics`. Mark each topic *core* (always runs) or *optional* (competes for a slot), and choose its status: *draft* topics stay hidden from students, *active* ones appear in the pool. (The form defaults to *active*; topics created through the API default to *draft*.) Add the Chinese title and description in the second section of the form.
 4. **Proposals** – students suggest topics (**Propose a topic**). Organisers edit, approve, reject or archive them (**Organiser → Proposals**). Approving creates an active topic.
@@ -168,7 +191,7 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-The suite covers login and password change, preference creation/update and duplicate prevention, score calculation, candidate ranking, every organiser-only operation, the proposal workflow, sessions and attendance rules, the web forms (including CSRF on every POST route), the English/Chinese interface (a completeness check on the catalogue, language selection, translated pages), bilingual topic content, and the command-line tools including the topic import.
+The suite covers login and password change, bulk account import, preference creation/update and duplicate prevention, score calculation, candidate ranking, every organiser-only operation, the proposal workflow, sessions and attendance rules, the web forms (including CSRF on every POST route), the English/Chinese interface (a completeness check on the catalogue, language selection, translated pages), bilingual topic content, and the command-line tools including the topic import.
 
 ## Known limitations
 
@@ -178,6 +201,7 @@ The suite covers login and password change, preference creation/update and dupli
 - **CSRF protection differs by interface.** Web forms carry a per-session token that every POST must present. The JSON API relies on the `SameSite=Lax` session cookie and JSON-only request bodies instead; keep it behind the same origin as the web pages and do not enable cross-origin (CORS) access without adding token checks.
 - **Small groups reveal individuals.** Aggregate counts (for example "1 lead presenter") can identify a person when only a few students vote.
 - **Last write wins** if the same person edits their preferences in two tabs.
+- Account import reads **CSV only** (not `.xlsx`), and there is no preview step: fix the reported rows and upload again.
 - Changing a presenter's role means removing and re-adding them. Replacing a provisional session's topic clears its presenters.
 - Timetable clashes (two sessions in the same week) are not checked, topics and sessions cannot be hard-deleted, and there are no notifications, calendar export or single sign-on (all out of scope for the first release).
 - The interface uses plain forms and full page loads; HTMX (suggested in the SRS) is not used.
